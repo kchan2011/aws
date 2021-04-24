@@ -1,0 +1,155 @@
+https://docs.aws.amazon.com/systems-manager/latest/userguide/sysman-manual-agent-install.html
+
+# RHEL 7.x and RHEL 8.x
+sudo yum install -y https://s3.region.amazonaws.com/amazon-ssm-region/latest/linux_amd64/amazon-ssm-agent.rpm
+
+sudo yum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm
+sudo systemctl enable amazon-ssm-agent
+sudo systemctl start amazon-ssm-agent
+sudo systemctl status amazon-ssm-agent
+
+==============================================
+
+cd C:\downloads\AWS\packer
+
+packer validate cm-rhel7.pkr.hcl
+
+packer build cm-rhel7.pkr.hcl
+
+==============================================
+
+c:\downloads\AWS\packer>packer build cm-rhel7.pkr.hcl
+amazon-ebs.cm_rhel7_base: output will be in this color.
+
+==> amazon-ebs.cm_rhel7_base: Prevalidating any provided VPC information
+==> amazon-ebs.cm_rhel7_base: Prevalidating AMI Name: packer cm rhel7 t3.medium 20210202154159
+    amazon-ebs.cm_rhel7_base: Found Image ID: ami-000d0465f31349503
+==> amazon-ebs.cm_rhel7_base: Creating temporary keypair: packer_601972c7-aa78-a2de-40b9-fa9d59198ac3
+==> amazon-ebs.cm_rhel7_base: Creating temporary security group for this instance: packer_601972c9-a4d7-0f42-d5c3-43b2ac2e263d
+==> amazon-ebs.cm_rhel7_base: Authorizing access to port 22 from [0.0.0.0/0] in the temporary security groups...
+==> amazon-ebs.cm_rhel7_base: Launching a source AWS instance...
+==> amazon-ebs.cm_rhel7_base: Adding tags to source instance
+    amazon-ebs.cm_rhel7_base: Adding tag: "Name": "Packer Builder"
+    amazon-ebs.cm_rhel7_base: Instance ID: i-0195cc6d75b295040
+==> amazon-ebs.cm_rhel7_base: Waiting for instance (i-0195cc6d75b295040) to become ready...
+==> amazon-ebs.cm_rhel7_base: Using ssh communicator to connect: 100.27.27.46
+==> amazon-ebs.cm_rhel7_base: Waiting for SSH to become available...
+==> amazon-ebs.cm_rhel7_base: Connected to SSH!
+==> amazon-ebs.cm_rhel7_base: Provisioning with shell script: C:\Users\kchan\AppData\Local\Temp\packer-shell346972671
+    amazon-ebs.cm_rhel7_base: Loaded plugins: amazon-id, search-disabled-repos
+    amazon-ebs.cm_rhel7_base: No packages marked for update
+    amazon-ebs.cm_rhel7_base: ansible 2.9.16
+    amazon-ebs.cm_rhel7_base:   config file = /etc/ansible/ansible.cfg
+    amazon-ebs.cm_rhel7_base:   configured module search path = [u'/home/ec2-user/.ansible/plugins/modules', u'/usr/share/ansible/plugins/modules']
+    amazon-ebs.cm_rhel7_base:   ansible python module location = /usr/lib/python2.7/site-packages/ansible
+    amazon-ebs.cm_rhel7_base:   executable location = /usr/bin/ansible
+    amazon-ebs.cm_rhel7_base:   python version = 2.7.5 (default, Aug 13 2020, 02:51:10) [GCC 4.8.5 20150623 (Red Hat 4.8.5-39)]
+    amazon-ebs.cm_rhel7_base: Loaded plugins: amazon-id, search-disabled-repos
+    amazon-ebs.cm_rhel7_base: Examining /var/tmp/yum-root-CSaORC/amazon-ssm-agent.rpm: amazon-ssm-agent-3.0.529.0-1.x86_64
+    amazon-ebs.cm_rhel7_base: Marking /var/tmp/yum-root-CSaORC/amazon-ssm-agent.rpm to be installed
+    amazon-ebs.cm_rhel7_base: Resolving Dependencies
+    amazon-ebs.cm_rhel7_base: --> Running transaction check
+    amazon-ebs.cm_rhel7_base: ---> Package amazon-ssm-agent.x86_64 0:3.0.529.0-1 will be installed
+    amazon-ebs.cm_rhel7_base: --> Finished Dependency Resolution
+    amazon-ebs.cm_rhel7_base:
+    amazon-ebs.cm_rhel7_base: Dependencies Resolved
+    amazon-ebs.cm_rhel7_base:
+    amazon-ebs.cm_rhel7_base: ================================================================================
+    amazon-ebs.cm_rhel7_base:  Package              Arch       Version            Repository             Size
+    amazon-ebs.cm_rhel7_base: ================================================================================
+    amazon-ebs.cm_rhel7_base: Installing:
+    amazon-ebs.cm_rhel7_base:  amazon-ssm-agent     x86_64     3.0.529.0-1        /amazon-ssm-agent     170 M
+    amazon-ebs.cm_rhel7_base:
+    amazon-ebs.cm_rhel7_base: Transaction Summary
+    amazon-ebs.cm_rhel7_base: ================================================================================
+    amazon-ebs.cm_rhel7_base: Install  1 Package
+    amazon-ebs.cm_rhel7_base:
+    amazon-ebs.cm_rhel7_base: Total size: 170 M
+    amazon-ebs.cm_rhel7_base: Installed size: 170 M
+    amazon-ebs.cm_rhel7_base: Downloading packages:
+    amazon-ebs.cm_rhel7_base: Running transaction check
+    amazon-ebs.cm_rhel7_base: Running transaction test
+    amazon-ebs.cm_rhel7_base: Transaction test succeeded
+    amazon-ebs.cm_rhel7_base: Running transaction
+    amazon-ebs.cm_rhel7_base:   Installing : amazon-ssm-agent-3.0.529.0-1.x86_64                          1/1
+    amazon-ebs.cm_rhel7_base: Created symlink from /etc/systemd/system/multi-user.target.wants/amazon-ssm-agent.service to /etc/systemd/system/amazon-ssm-agent.service.
+    amazon-ebs.cm_rhel7_base:   Verifying  : amazon-ssm-agent-3.0.529.0-1.x86_64                          1/1
+    amazon-ebs.cm_rhel7_base:
+    amazon-ebs.cm_rhel7_base: Installed:
+    amazon-ebs.cm_rhel7_base:   amazon-ssm-agent.x86_64 0:3.0.529.0-1
+    amazon-ebs.cm_rhel7_base:
+    amazon-ebs.cm_rhel7_base: Complete!
+    amazon-ebs.cm_rhel7_base: ● amazon-ssm-agent.service - amazon-ssm-agent
+    amazon-ebs.cm_rhel7_base:    Loaded: loaded (/etc/systemd/system/amazon-ssm-agent.service; enabled; vendor preset: disabled)
+    amazon-ebs.cm_rhel7_base:    Active: active (running) since Tue 2021-02-02 15:43:34 UTC; 328ms ago
+    amazon-ebs.cm_rhel7_base:  Main PID: 7483 (amazon-ssm-agen)
+    amazon-ebs.cm_rhel7_base:    CGroup: /system.slice/amazon-ssm-agent.service
+    amazon-ebs.cm_rhel7_base:            └─7483 /usr/bin/amazon-ssm-agent
+    amazon-ebs.cm_rhel7_base:
+    amazon-ebs.cm_rhel7_base: Feb 02 15:43:34 ip-172-31-88-210.ec2.internal systemd[1]: Started amazon-ssm-agent.
+    amazon-ebs.cm_rhel7_base: Feb 02 15:43:34 ip-172-31-88-210.ec2.internal amazon-ssm-agent[7483]: Error occurred fetching the seelog config file path:  open /etc/amazon/ssm/seelog.xml: no such file or directory
+    amazon-ebs.cm_rhel7_base: Feb 02 15:43:34 ip-172-31-88-210.ec2.internal amazon-ssm-agent[7483]: Initializing new seelog logger
+    amazon-ebs.cm_rhel7_base: Feb 02 15:43:34 ip-172-31-88-210.ec2.internal amazon-ssm-agent[7483]: New Seelog Logger Creation Complete
+    amazon-ebs.cm_rhel7_base: Feb 02 15:43:34 ip-172-31-88-210.ec2.internal amazon-ssm-agent[7483]: 2021-02-02 15:43:34 INFO [amazon-ssm-agent] amazon-ssm-agent - v3.0.529.0
+    amazon-ebs.cm_rhel7_base: Feb 02 15:43:34 ip-172-31-88-210.ec2.internal amazon-ssm-agent[7483]: 2021-02-02 15:43:34 INFO [amazon-ssm-agent] OS: linux, Arch: amd64
+==> amazon-ebs.cm_rhel7_base: Stopping the source instance...
+    amazon-ebs.cm_rhel7_base: Stopping instance
+==> amazon-ebs.cm_rhel7_base: Waiting for the instance to stop...
+==> amazon-ebs.cm_rhel7_base: Creating AMI packer cm rhel7 t3.medium 20210202154159 from instance i-0195cc6d75b295040
+    amazon-ebs.cm_rhel7_base: AMI: ami-0cfa2d30864992635
+==> amazon-ebs.cm_rhel7_base: Waiting for AMI to become ready...
+==> amazon-ebs.cm_rhel7_base: Modifying attributes on AMI (ami-0cfa2d30864992635)...
+    amazon-ebs.cm_rhel7_base: Modifying: description
+==> amazon-ebs.cm_rhel7_base: Modifying attributes on snapshot (snap-0f8265111b066d0c9)...
+==> amazon-ebs.cm_rhel7_base: Terminating the source AWS instance...
+==> amazon-ebs.cm_rhel7_base: Cleaning up any extra volumes...
+==> amazon-ebs.cm_rhel7_base: No volumes to clean up, skipping
+==> amazon-ebs.cm_rhel7_base: Deleting temporary security group...
+==> amazon-ebs.cm_rhel7_base: Deleting temporary keypair...
+Build 'amazon-ebs.cm_rhel7_base' finished after 4 minutes 26 seconds.
+
+==> Wait completed after 4 minutes 26 seconds
+
+==> Builds finished. The artifacts of successful builds are:
+--> amazon-ebs.cm_rhel7_base: AMIs were created:
+us-east-1: ami-0cfa2d30864992635
+
+c:\downloads\AWS\packer>
+
+========================
+AWS Systems Manager Quick Setup
+https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-quick-setup.html#quick-setup-instance-profile
+
+https://docs.aws.amazon.com/organizations/latest/userguide/orgs_getting-started.html
+https://docs.aws.amazon.com/organizations/latest/userguide/orgs_tutorials.html
+
+https://console.aws.amazon.com/organizations/home?region=us-east-1#/getting-started
+Create organization
+Select account(s) and click on Add account
+
+Click on "Create account"
+Account name: kchan2018
+Email address assoicated with the account: kchan2018@gmail.com
+
+========================
+
+RHEL 7 with AWS Systems Server Manager Agent (SSM) installed
+ami-0cfa2d30864992635
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
