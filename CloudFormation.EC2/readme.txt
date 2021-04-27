@@ -15,4 +15,5 @@ SET Env=POC
 SET KeyName=kevinchanSMBC
 aws cloudformation deploy --template-file C:\downloads\github\aws\CloudFormation.EFS\devops\SonarQube.yml --stack-name CM-SonarQube-EFS --parameter-overrides Env=%Env%
 
+aws cloudformation describe-stack-events --stack-name CM-SonarQube 
 ======
