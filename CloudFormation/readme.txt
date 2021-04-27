@@ -6,14 +6,14 @@ aws cloudformation deploy --template-file <value> --stack-name <value>
 
 SET Env=POC
 SET KeyName=kevinchanSMBC
-aws cloudformation deploy --template-file C:\downloads\github\aws\CloudFormation.EC2\devops\EC2.yml --stack-name CM-SonarQube --parameter-overrides KeyName=%KeyName% Env=%Env%
+aws cloudformation deploy --template-file C:\downloads\github\aws\CloudFormation\EC2\devops\SonarQube.yml --stack-name CM-SonarQube --parameter-overrides KeyName=%KeyName% Env=%Env%
 
 InstanceType=t2.micro
 ======
 
 SET Env=POC
 SET KeyName=kevinchanSMBC
-aws cloudformation deploy --template-file C:\downloads\github\aws\CloudFormation.EFS\devops\SonarQube.yml --stack-name CM-SonarQube-EFS --parameter-overrides Env=%Env%
+aws cloudformation deploy --template-file C:\downloads\github\aws\CloudFormation\EFS\devops\SonarQube.yml --stack-name CM-SonarQube-EFS --parameter-overrides Env=%Env%
 
 aws cloudformation describe-stack-events --stack-name CM-SonarQube 
 ======
