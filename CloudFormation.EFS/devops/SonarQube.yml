@@ -1,0 +1,99 @@
+# https://computingforgeeks.com/create-aws-efs-filesystem-with-cloudformation/
+
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Create EFS system and Mount Targets for test VPC"
+
+Parameters:
+  Env:
+    Description: Application Envirnoment Type
+    Type: String
+    ConstraintDescription: must be one of the following.
+    #Default: Dev
+    AllowedValues: [POC, Test, Dev, QA, UAT, PreProd, Staging, Prod, DR]
+
+  VPC:
+      Type: String
+      Description: Kevin VPC
+      Default: vpc-07c9b85d62b6f4a7f
+
+  SubnetID1:
+      Type: String
+      Description: kevin-private-us-east-1b subnet
+      Default: subnet-0d5faa025dde79b24
+
+  # SubnetID2:
+  #     Type: String
+  #     Description: the subnet where to Launch the service
+  #     Default: subnet-ID
+
+Resources:
+  EFSSecurityGroup:
+      Type: "AWS::EC2::SecurityGroup"
+      Properties:
+        GroupDescription: "security group for the prod EFS"
+        GroupName: "SonarQube-EFS-SG"
+        VpcId: !Ref VPC
+        SecurityGroupIngress: 
+          - 
+            SourceSecurityGroupId: sg-09df13e6b51f7ac93  # security group of the ec2 instances that should access the EFS
+            Description: "servers to connect to efs"
+            FromPort: 2049
+            IpProtocol: "tcp"
+            ToPort: 2049
+        Tags:
+          - Key: "Name"
+            Value: !Join ['-', [ 'SonarQube-VPC-EFS-SG-', !Ref 'Env' ] ] 
+          - Key: "Env"
+            Value: !Ref 'Env'
+          - Key: "OwnerContact"
+            Value: "nydevops@smbc-cm.com"
+
+  EFSFileSystem:
+    Type: AWS::EFS::FileSystem
+    Properties:
+        BackupPolicy:
+          Status: ENABLED
+        Encrypted: true
+        # LifecyclePolicies:
+        #   - TransitionToIA: AFTER_60_DAYS
+        PerformanceMode: generalPurpose
+        Encrypted: true
+        ThroughputMode: bursting
+        FileSystemTags: 
+          - Key: "Name"
+            Value: !Join ['-', [ 'SonarQube-VPC-EFS-', !Ref 'Env' ] ] 
+          - Key: "Env"
+            Value: !Ref 'Env'
+          - Key: "OwnerContact"
+            Value: "nydevops@smbc-cm.com"
+            
+  MountTarget1:
+    Type: AWS::EFS::MountTarget
+    Properties: 
+        FileSystemId: !Ref EFSFileSystem
+        IpAddress: 10.0.10.200  # IP address of each Mount Target (It should reflect an Unused IP on the subnet CIDR Block).
+        SecurityGroups: 
+          - !Ref EFSSecurityGroup
+        SubnetId: !Ref SubnetID1
+
+  # MountTarget2:
+#     Type: AWS::EFS::MountTarget
+#     Properties: 
+#         FileSystemId: !Ref EFSFileSystem
+#         IpAddress: *.*.*.*
+#         SecurityGroups: 
+#           - !Ref EFSSecurityGroup
+#         SubnetId: !Ref SubnetID2
+
+Outputs:
+  EFS:
+    Description: The created EFS 
+    Value: !Ref EFSFileSystem
+
+  EFSMountTarget1:
+    Description: The EFS MountTarget1
+    Value: !Ref MountTarget1
+
+  # EFSMountTarget2:
+  #   Description: The EFS MountTarget2
+  #   Value: !Ref MountTarget2

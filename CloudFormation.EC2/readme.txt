@@ -4,8 +4,15 @@ https://docs.aws.amazon.com/cli/latest/reference/cloudformation/index.html
 
 aws cloudformation deploy --template-file <value> --stack-name <value> 
 
-aws cloudformation deploy --template-file C:\downloads\github\aws\CloudFormation.EC2\devops\EC2.yml --stack-name CM-SonarQube --parameter-overrides KeyName=kevinchanSMBC 
+SET Env=POC
+SET KeyName=kevinchanSMBC
+aws cloudformation deploy --template-file C:\downloads\github\aws\CloudFormation.EC2\devops\EC2.yml --stack-name CM-SonarQube --parameter-overrides KeyName=%KeyName% Env=%Env%
 
 InstanceType=t2.micro
+======
+
+SET Env=POC
+SET KeyName=kevinchanSMBC
+aws cloudformation deploy --template-file C:\downloads\github\aws\CloudFormation.EFS\devops\SonarQube.yml --stack-name CM-SonarQube-EFS --parameter-overrides Env=%Env%
 
 ======
