@@ -1,0 +1,32 @@
+https://docs.aws.amazon.com/cdk/latest/guide/getting_started.html
+https://devops4solutions.medium.com/aws-cloudformation-init-with-examples-89cb40fb9ed2
+https://advancedweb.hu/how-to-use-cfn-init-to-set-up-ec2-instances-with-cloudformation/
+https://serverfault.com/questions/462522/why-doesnt-the-aws-cloud-formation-install-the-packages-that-i-specify
+https://medium.com/@pasindujay/switch-userdata-in-cloudformation-script-based-on-os-of-instance-788d08b9daf8
+
+
+SET Env=Dev
+SET KeyName=kevinchanSMBC
+aws cloudformation deploy --template-file C:\downloads\github\aws\CloudFormation\EC2\devops\AWSCDK.yml --stack-name CM-AWSCDK --parameter-overrides KeyName=%KeyName% Env=%Env%
+
+# https://linuxize.com/post/how-to-install-node-js-on-ubuntu-20-04/
+
+sudo apt update
+sudo apt -y install nodejs npm
+
+nodejs --version
+
+https://www.youtube.com/watch?v=pJPRvx7Vfk0
+
+ec2metadata
+
+=================
+
+#Install the AWS CDK
+#Install the AWS CDK Toolkit globally using the following Node Package Manager command.
+
+npm install -g aws-cdk
+
+# Run the following command to verify correct installation and print the version number of the AWS CDK.
+
+cdk --version

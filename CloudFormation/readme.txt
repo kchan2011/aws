@@ -15,5 +15,31 @@ SET Env=POC
 SET KeyName=kevinchanSMBC
 aws cloudformation deploy --template-file C:\downloads\github\aws\CloudFormation\EFS\devops\SonarQube.yml --stack-name CM-SonarQube-EFS --parameter-overrides Env=%Env%
 
-aws cloudformation describe-stack-events --stack-name CM-SonarQube 
+aws cloudformation describe-stack-events --stack-name CM-SonarQube
+ 
 ======
+
+SET Env=Dev
+SET KeyName=kevinchanSMBC
+aws cloudformation deploy --template-file C:\downloads\github\aws\CloudFormation\EC2\devops\AnsibleAWX.yml --stack-name CM-AnsibleAWX2 --parameter-overrides KeyName=%KeyName% Env=%Env%
+
+======
+
+SET Env=Dev
+SET KeyName=kevinchanSMBC
+aws cloudformation deploy --template-file C:\downloads\github\aws\CloudFormation\EC2\devops\AnsibleAWX.yml --stack-name CM-SonarQube --parameter-overrides KeyName=%KeyName% Env=%Env%
+
+======
+
+SET Env=Dev
+SET KeyName=kevinchanSMBC
+aws cloudformation deploy --template-file C:\downloads\github\aws\CloudFormation\EC2\devops\AWSCDK.yml --stack-name CM-AWSCDK --parameter-overrides KeyName=%KeyName% Env=%Env%
+
+=================
+Create a Chnage Set
+
+aws cloudformation create-change-set --template-body file://changeset.yaml --stack-name CM-AWSCDK --capabilites CAPABILITY_NAMED_IAM
+
+aws cloudformation describe-change-set --change-set-name changeset --stack-name CM-AWSCDK
+
+aws cloudformation execute-change-set --change-set-name changeset --stack-name CM-AWSCDK
