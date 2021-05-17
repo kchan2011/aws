@@ -1,0 +1,276 @@
+# https://computingforgeeks.com/configure-aws-application-load-balancer-with-cloudformation/
+# https://stackoverflow.com/questions/63118516/aws-cloudformation-target-group-for-application-load-balancer-is-not-working-fo
+# https://linuxtut.com/en/8ff718cd1e66778f88b5/
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-init.html
+# https://aws.amazon.com/premiumsupport/knowledge-center/cloudformation-helper-scripts-windows/
+# https://stackoverflow.com/questions/39760158/ubuntu-could-not-enable-service-cfn-hup
+# https://github.com/villasv/aws-airflow-stack/issues/72
+# https://stackoverflow.com/questions/39760158/ubuntu-could-not-enable-service-cfn-hup
+# https://www.atcomputing.nl/blog/aws-cloudformation-updating-ec2-instance-with-cfn-hup/
+# https://cfn101.workshop.aws/30-workshop-part-01/30-launching-ec2/400-lab-09-helper-scripts.html
+# https://gist.github.com/kixorz/10194688
+# https://gist.github.com/mmasko/66d34b651642525c63cd39251e0c2a8b
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Create an Amazon EC2 instances running a Windows 2019 with AZ, VPC, subnet, SG and install CloudWatchAgent
+The AMI is chosen based on the region in which the stack is run.'
+Metadata:
+  AWS::CloudFormation::Interface: 
+    ParameterGroups: 
+      - Label: 
+          default: "Network Configuration"
+        Parameters: 
+          - Vpc
+          - Subnet
+          - SecurityGroupID
+          - SSHLocation
+      - Label: 
+          default: "Amazon EC2 Configuration"
+        Parameters:
+          - Env
+          - KeyName
+          - ImageId
+    ParameterLabels: 
+      Vpc: 
+        default: "Which VPC should this be deployed to?"
+
+Parameters:
+  Env:
+    Description: Application Envirnoment Type
+    Type: String
+    ConstraintDescription: must specify Dev, UAT, Prod.
+    #Default: Dev
+    AllowedValues: [Dev, UAT, Prod]
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instance
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+  Vpc:
+    # Type: "List<AWS::EC2::VPC::Id>"
+    Type: AWS::EC2::VPC::Id
+    Default: vpc-07c9b85d62b6f4a7f
+    Description: VpcId of your existing Virtual Private Cloud (VPC)
+    ConstraintDescription: must be the VPC Id of an existing Virtual Private Cloud.
+  Subnet:
+    # Type: "List<AWS::EC2::Subnet::Id>"
+    Type: AWS::EC2::Subnet::Id
+    # Default: subnet-0d5faa025dde79b24  #Private subnet 1
+    Default: subnet-04944cb845252203a #Public subnet
+    Description: SubnetId of an existing subnet (for the primary network) in your Virtual Private Cloud (VPC)
+    ConstraintDescription: must be an existing subnet in the selected Virtual Private Cloud.
+  SSHLocation:
+    Description: The IP address range that can be used to SSH to the EC2 instances
+    Type: String
+    MinLength: 9
+    MaxLength: 18
+    # Default: 0.0.0.0/0
+    Default: 67.82.52.94/32
+    AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})
+    ConstraintDescription: must be a valid IP CIDR range of the form x.x.x.x/x.
+  EC2Image:
+    Type: String
+    Default: 'Windows Server 2019 Base'
+    ConstraintDescription: Select EC2 Instance AMI
+    AllowedValues: ['Windows Server 2019 Base', 'CIS Microsoft Windows Server 2019 Benchmark - Level 1']
+  EC2Iam:
+    Type: String
+    Default: EC2SSM
+    ConstraintDescription: Type in EC2 IAM
+
+Conditions:
+  CreateDevResources:  !Equals [!Ref Env, "Dev" ]
+  CreateUATResources:  !Equals [!Ref Env, "UAT" ]
+  CreateProdResources: !Equals [!Ref Env, "Prod"]
+
+  CreateEC2_W2019_CIS: !Equals [!Ref EC2Image, 'CIS Microsoft Windows Server 2019 Benchmark - Level 1' ]
+  CreateEC2_W2019Base: !Equals [!Ref EC2Image, 'Microsoft Windows Server 2019 Base' ]
+
+Resources:
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription:  !Join ['-', [ !Ref 'AWS::StackName', 'cfn' ] ] 
+      SecurityGroupIngress:
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 0.0.0.0/0
+      VpcId: !Ref 'Vpc'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3389
+          ToPort: 3389
+          CidrIp: 67.82.52.94/32
+      VpcId: !Ref 'Vpc'
+
+  EC2Instance1:
+    Type: AWS::EC2::Instance
+    # CreationPolicy:
+    #   ResourceSignal:
+    #     Timeout: PT5M
+    Metadata:
+      AWS::CloudFormation::Init:
+        configSets:
+          default:
+            - 00_setupCfnHup
+            - 01_CfnHup_service
+            - 02_config-amazon-cloudwatch-agent
+            - 03_restart_amazon-cloudwatch-agent
+          UpdateEnvironment:
+            - 02_config-amazon-cloudwatch-agent
+            - 03_restart_amazon-cloudwatch-agent
+        # Cfn-hup setting, it is to monitor the change of metadata.
+        # When there is change in the contents of json file in the metadata section, cfn-hup will call cfn-init to restart the AmazonCloudWatchAgent.
+        00_setupCfnHup:
+          files:
+            "c:\\cfn\\cfn-hup.conf":
+              content: !Sub |
+                [main]
+                stack=${AWS::StackId}
+                region=${AWS::Region}
+                interval=1
+            "c:\\cfn\\hooks.d\\amazon-cloudwatch-agent-auto-reloader.conf":
+              content: !Sub |
+                [cfn-auto-reloader-hook]
+                triggers=post.update
+                path=Resources.EC2Instance.Metadata.AWS::CloudFormation::Init.02_config-amazon-cloudwatch-agent
+                action=cfn-init.exe -v --stack ${AWS::StackId} --resource EC2Instance1 --region ${AWS::Region} --configsets UpdateEnvironment
+        01_CfnHup_service:
+          services:
+            windows:
+              cfn-hup:
+                enabled: 'true'
+                ensureRunning: 'true'
+                files:
+                  - "c:\\cfn\\cfn-hup.conf"
+                  - "c:\\cfn\\hooks.d\\cfn-auto-reloader.conf"
+        # Definition of json configuration of AmazonCloudWatchAgent, you can change the configuration below.
+        02_config-amazon-cloudwatch-agent:
+          files:
+            "C:\\ProgramData\\Amazon\\AmazonCloudWatchAgent\\amazon-cloudwatch-agent.json":
+              content: !Sub |
+                {
+                  "metrics": {
+                    "append_dimensions": {
+                      "AutoScalingGroupName": "${!aws:AutoScalingGroupName}",
+                      "ImageId": "${!aws:ImageId}",
+                      "InstanceId": "${!aws:InstanceId}",
+                      "InstanceType": "${!aws:InstanceType}"
+                    },
+                    "metrics_collected": {
+                      "Memory": {
+                        "measurement": [
+                          "% Committed Bytes In Use"
+                        ],
+                        "metrics_collection_interval": 60
+                      },
+                      "Paging File": {
+                        "measurement": [
+                          "% Usage"
+                        ],
+                        "metrics_collection_interval": 60,
+                        "resources": [
+                          "*"
+                        ]
+                      }
+                    }
+                  }
+                }
+        # Invoke amazon-cloudwatch-agent-ctl to restart the AmazonCloudWatchAgent.
+        03_restart_amazon-cloudwatch-agent:
+          commands:
+            01_stop_service:
+              command: powershell -Command "C:\\'Program Files'\\Amazon\\AmazonCloudWatchAgent\\amazon-cloudwatch-agent-ctl.ps1 -a stop"
+            02_start_service:
+              command: powershell -Command "C:\\'Program Files'\\Amazon\\AmazonCloudWatchAgent\\amazon-cloudwatch-agent-ctl.ps1 -a fetch-config -m ec2 -c file:C:\\ProgramData\\Amazon\\AmazonCloudWatchAgent\\amazon-cloudwatch-agent.json -s"
+
+    # Microsoft Windows Server 2019 Base - Ami Id: ami-0f93c815788872c5d
+    # https://aws.amazon.com/marketplace/server/configuration?productId=ef297a90-3ad0-4674-83b4-7f0ec07c39bb&ref_=psb_cfg_continue
+
+    # CIS Microsoft Windows Server 2019 Benchmark - Level 1 - ami-0591c7ab7e850a869
+    # https://aws.amazon.com/marketplace/server/configuration?productId=2388e867-6f4e-45c4-bf4e-78d4c3a870d6&ref_=psb_cfg_continue
+    # DisableApiTermination: true
+    Properties:
+      ImageId: !If [CreateEC2_W2019_CIS, ami-0591c7ab7e850a869, !If [CreateEC2_W2019Base, ami-0f93c815788872c5d, ami-0f93c815788872c5d] ]  
+      # ImageId: ami-0f93c815788872c5d
+
+      # InstanceType: !Ref 'InstanceType'
+      InstanceType: !If [CreateProdResources, m5.large, !If [CreateDevResources, t2.micro, t3.large] ]  
+
+      KeyName: !Ref 'KeyName'
+      IamInstanceProfile: !Ref 'EC2Iam'
+      # Monitoring: true
+      # Monitoring: false
+      SubnetId: !Ref 'Subnet'
+      SecurityGroupIds:
+        - !Ref EC2SecurityGroup
+      # https://aws.amazon.com/blogs/infrastructure-and-automation/amazon-s3-authenticated-bootstrapping-in-aws-cloudformation/
+      # https://linuxtut.com/en/8ff718cd1e66778f88b5/
+      # Check /var/log/cloud-init-output.log to troubleshoot UserData 
+
+      # https://github.com/awslabs/aws-cloudformation-templates/blob/master/aws/solutions/AmazonCloudWatchAgent/inline/windows.template
+      UserData:
+        'Fn::Base64': !Sub |
+          <script>
+          mkdir C:\src\Amazon\AmazonCloudWatchAgent
+          powershell -Command "(New-Object Net.WebClient).DownloadFile('https://s3.amazonaws.com/amazoncloudwatch-agent/windows/amd64/latest/amazon-cloudwatch-agent.msi','C:\src\Amazon\AmazonCloudWatchAgent\amazon-cloudwatch-agent.msi')"
+          C:\src\Amazon\AmazonCloudWatchAgent\amazon-cloudwatch-agent.msi
+          cfn-init.exe -v --stack ${AWS::StackId} --resource EC2Instance1 --region ${AWS::Region} --configsets default
+          cfn-signal.exe -e %errorlevel% --stack ${AWS::StackId} --resource EC2Instance1 --region ${AWS::Region}
+          # format new disk 1 and assign as D: drive
+          Initialize-Disk -Number 1
+          New-Partition -DiskNumber 1 -UseMaximumSize | Format-Volume -FileSystem NTFS -NewFileSystemLabel Apps
+          Get-Partition -DiskNumber 1 | Set-Partition -NewDriveLetter D
+          </script>
+
+      # https://docs.aws.amazon.com/AWSEC2/latest/WindowsGuide/device_naming.html
+      BlockDeviceMappings:
+        - DeviceName: "/dev/sda1"
+          Ebs:
+            VolumeSize: 50
+            VolumeType: gp3
+            Encrypted: true
+        - DeviceName: "/dev/sdf"
+          Ebs:
+            VolumeSize: 8
+            VolumeType: gp3
+            Encrypted: true
+            DeleteOnTermination: true
+
+      Tags:
+        - Key:   Name
+          Value: !Join ['-', [ !Ref 'AWS::StackName', 'cfn' ] ]
+          #Value: !Ref 'AWS::StackName'
+        - Key:   Env
+          Value: !Ref 'Env'
+        - Key:   OwnerContact
+          Value: "nydevops@smbc-cm.com"
+
+Outputs:
+  Env:
+    Description: EC2 instance Environment
+    Value: !Ref 'Env'
+  InstanceId1:
+    Description: InstanceId of the newly created EC2 instance
+    Value: !Ref 'EC2Instance1'
+  EC2Image:
+    Description: Instance Image of the newly created EC2 instance
+    Value: !Ref 'EC2Image'
+  SecurityGroupId:
+    Description: Group ID of the newly created EC2 security group
+    Value: EC2SecurityGroup
+  AZ1:
+    Description: Availability Zone of the newly created EC2 instance
+    Value: !GetAtt [EC2Instance1, AvailabilityZone]
+  PrivateDnsName1:
+    Description: Private DNSName of the newly created EC2 instance
+    Value: !GetAtt [EC2Instance1, PrivateDnsName]
+  PrivateIp1:
+    Description: Private IP address of the newly created EC2 instance
+    Value: !GetAtt [EC2Instance1, PrivateIp]
+  # PublicDNS:
+  #   Description: Public DNSName of the newly created EC2 instance
+  #   Value: !GetAtt [EC2Instance1, PublicDnsName]
+  # PublicIP:
+  #   Description: Public IP address of the newly created EC2 instance
+  #   Value: !GetAtt [EC2Instance1, PublicIp]
