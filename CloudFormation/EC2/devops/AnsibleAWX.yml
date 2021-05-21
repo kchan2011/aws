@@ -8,7 +8,8 @@ Metadata:
           default: "Network Configuration"
         Parameters: 
           - Vpc
-          - PrivateSubnet
+          - PrivateSubnet1a
+          - PrivateSubnet1b
           - SecurityGroupID
           - SSHLocation
       - Label: 
@@ -25,9 +26,9 @@ Parameters:
   Env:
     Description: Application Envirnoment Type
     Type: String
-    ConstraintDescription: must specify POC, Test, Dev, QA, UAT, PreProd, Staging, Prod, DR.
+    ConstraintDescription: must specify POC, Test, Dev, QA, UAT, PreProd, Staging, Prod1a, Prod1b.
     #Default: Dev
-    AllowedValues: [Dev, UAT, Prod]
+    AllowedValues: [Dev, UAT, Prod1a, Prod1b]
   KeyName:
     Description: Name of an existing EC2 KeyPair to enable SSH access to the instance
     Type: AWS::EC2::KeyPair::KeyName
@@ -37,12 +38,19 @@ Parameters:
     Default: vpc-07c9b85d62b6f4a7f
     Description: VpcId of your existing Virtual Private Cloud (VPC)
     ConstraintDescription: must be the VPC Id of an existing Virtual Private Cloud.
-  PrivateSubnet:
+  PrivateSubnet1a:
     # Type: AWS::EC2::Subnet::Id
-    Type: "List<AWS::EC2::Subnet::Id>"
-    Default: subnet-0d5faa025dde79b24
-    Description: SubnetId of an existing subnet (for the primary network) in your Virtual Private Cloud (VPC)
+    Type: String
+    Default: subnet-0c6790c3ecaffce32 # us-east-1a
+    Description: SubnetId of an existing subnet in 1 in your VPC
     ConstraintDescription: must be an existing subnet in the selected Virtual Private Cloud.
+  PrivateSubnet1b:
+    # Type: AWS::EC2::Subnet::Id
+    Type: String
+    Default: subnet-0d5faa025dde79b24 # us-east-1b
+    Description: SubnetId of an existing subnet in AZ2 in your VPC
+    ConstraintDescription: must be an existing subnet in the selected Virtual Private Cloud.
+ 
   SSHLocation:
     Description: The IP address range that can be used to SSH to the EC2 instances
     Type: String
@@ -74,7 +82,9 @@ Parameters:
 Conditions:
   CreateDevResources:  !Equals [!Ref Env, "Dev"]
   CreateUATResources:  !Equals [!Ref Env, "UAT"]
-  CreateProdResources: !Equals [!Ref Env, "Prod"]
+  CreateProd1aResources: !Equals [!Ref Env, "Prod1a"]
+  CreateProd1bResources: !Equals [!Ref Env, "Prod1b"]
+  CreateProdResources:   !Or [!Equals [!Ref Env, "Prod1a"], !Equals [!Ref Env, "Prod1b"]]
 
   CreateEC2_Ubuntu20.04LTS_CIS: !Equals [!Ref EC2Image, "CIS Ubuntu Linux 20.04 LTS Benchmark" ]
   CreateEC2_Ubuntu20.04LTS:     !Equals [!Ref EC2Image, "Ubuntu Pro 20.04 LTS" ]
@@ -259,7 +269,9 @@ Resources:
       IamInstanceProfile: !Ref 'EC2Iam'
       # Monitoring: true
       # Monitoring: false
-      SubnetId: subnet-0d5faa025dde79b24
+      # SubnetId: subnet-0d5faa025dde79b24
+      SubnetId: !If [CreateProd1bResources, !Ref PrivateSubnet1b, !Ref PrivateSubnet1a ]
+     
       SecurityGroupIds:
         - !Ref EC2SecurityGroup
       # https://aws.amazon.com/blogs/infrastructure-and-automation/amazon-s3-authenticated-bootstrapping-in-aws-cloudformation/
