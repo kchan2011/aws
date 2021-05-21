@@ -8,7 +8,8 @@ Metadata:
           default: "Network Configuration"
         Parameters: 
           - Vpc
-          - PrivateSubnet
+          - PrivateSubnet1a
+          - PrivateSubnet1b
           - SecurityGroupID
           - SSHLocation
       - Label: 
@@ -25,9 +26,9 @@ Parameters:
   Env:
     Description: Application Envirnoment Type
     Type: String
-    ConstraintDescription: must specify POC, Test, Dev, QA, UAT, PreProd, Staging, Prod, DR.
+    ConstraintDescription: must specify POC, Test, Dev, QA, UAT, PreProd, Staging, Prod1a, Prod1b.
     #Default: Dev
-    AllowedValues: [Dev, UAT, Prod]
+    AllowedValues: [Dev, UAT, Prod1a, Prod1b]
   KeyName:
     Description: Name of an existing EC2 KeyPair to enable SSH access to the instance
     Type: AWS::EC2::KeyPair::KeyName
@@ -37,11 +38,17 @@ Parameters:
     Default: vpc-07c9b85d62b6f4a7f
     Description: VpcId of your existing Virtual Private Cloud (VPC)
     ConstraintDescription: must be the VPC Id of an existing Virtual Private Cloud.
-  PrivateSubnet:
+  PrivateSubnet1a:
     # Type: AWS::EC2::Subnet::Id
-    Type: "List<AWS::EC2::Subnet::Id>"
-    Default: subnet-0d5faa025dde79b24
-    Description: SubnetId of an existing subnet (for the primary network) in your Virtual Private Cloud (VPC)
+    Type: String
+    Default: subnet-0c6790c3ecaffce32 # us-east-1a
+    Description: SubnetId of an existing subnet in 1 in your VPC
+    ConstraintDescription: must be an existing subnet in the selected Virtual Private Cloud.
+  PrivateSubnet1b:
+    # Type: AWS::EC2::Subnet::Id
+    Type: String
+    Default: subnet-0d5faa025dde79b24 # us-east-1b
+    Description: SubnetId of an existing subnet in AZ2 in your VPC
     ConstraintDescription: must be an existing subnet in the selected Virtual Private Cloud.
   SSHLocation:
     Description: The IP address range that can be used to SSH to the EC2 instances
@@ -70,11 +77,13 @@ Parameters:
   SonarQubePassword:
     Type: String
     Default: Sonar
-
+    ConstraintDescription: Type in EC2 IAM
 Conditions:
-  CreateDevResources:  !Equals [!Ref Env, "Dev"]
-  CreateUATResources:  !Equals [!Ref Env, "UAT"]
-  CreateProdResources: !Equals [!Ref Env, "Prod"]
+  CreateDevResources:    !Equals [!Ref Env, "Dev"]
+  CreateUATResources:    !Equals [!Ref Env, "UAT"]
+  CreateProd1aResources: !Equals [!Ref Env, "Prod1a"]
+  CreateProd1bResources: !Equals [!Ref Env, "Prod1b"]
+  CreateProdResources:   !Or [!Equals [!Ref Env, "Prod1a"], !Equals [!Ref Env, "Prod1b"]]
 
   CreateEC2_Ubuntu20.04LTS_CIS: !Equals [!Ref EC2Image, "CIS Ubuntu Linux 20.04 LTS Benchmark" ]
   CreateEC2_Ubuntu20.04LTS:     !Equals [!Ref EC2Image, "Ubuntu Pro 20.04 LTS" ]
@@ -108,10 +117,6 @@ Resources:
 
   EC2Instance1:
     Type: AWS::EC2::Instance
-    # CreationPolicy:
-    #   ResourceSignal:
-    #     Timeout: PT5M
-
     # https://linuxtut.com/en/8ff718cd1e66778f88b5/
     # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-init.html
     # https://aws.amazon.com/premiumsupport/knowledge-center/cloudformation-helper-scripts-windows/
@@ -133,8 +138,8 @@ Resources:
               docker-compose: []
           files: 
             /var/www/html/index.html: 
-              content: |
-                Hello World 1
+              content: !Sub |
+                Hello World ${Env} - ${EC2Instance1}
             /home/root/docker-compose.yml:
               content: !Sub |
                 version: "3"
@@ -253,13 +258,15 @@ Resources:
       ImageId: !If [CreateEC2_Ubuntu20.04LTS_CIS, ami-0de8ae0e6d86b93c8, !If [CreateEC2_Ubuntu20.04LTS, ami-0ed28656d62ce20d6, ami-0ed28656d62ce20d6] ]  
 
       # InstanceType: !Ref 'InstanceType'
-      InstanceType: !If [CreateProdResources, m5.large, !If [CreateDevResources, t2.micro, t3.large] ]  
+      InstanceType: !If [CreateProdResources, m5.large,  !If [CreateDevResources, t2.micro, t3.large] ]  
 
       KeyName: !Ref 'KeyName'
       IamInstanceProfile: !Ref 'EC2Iam'
       # Monitoring: true
-      # Monitoring: false
-      SubnetId: subnet-0d5faa025dde79b24
+      # Monitoring: false 
+      # SubnetId: subnet-0d5faa025dde79b24
+      SubnetId: !If [CreateProd1bResources, !Ref PrivateSubnet1b, !Ref PrivateSubnet1a ]
+
       SecurityGroupIds:
         - !Ref EC2SecurityGroup
       # https://aws.amazon.com/blogs/infrastructure-and-automation/amazon-s3-authenticated-bootstrapping-in-aws-cloudformation/
@@ -319,10 +326,15 @@ Resources:
       Tags:
         - Key: Name
           Value: !Join ['-', [ !Ref 'AWS::StackName', 'cfn' ] ]
+          # Value: !Ref 'AWS::StackName'
         - Key: Env
           Value: !Ref 'Env'
         - Key: OwnerContact
           Value: "nydevops@smbc-cm.com"
+
+      # CreationPolicy:
+      #   ResourceSignal:
+      #     Timeout: PT7M
 
 Outputs:
   Env:

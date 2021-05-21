@@ -258,21 +258,29 @@ Outputs:
   InstanceId1:
     Description: InstanceId of the newly created EC2 instance
     Value: !Ref 'EC2Instance1'
+    Export:
+      Name: !Sub ${AWS::StackName}-InstanceId1
   EC2Image:
     Description: Instance Image of the newly created EC2 instance
     Value: !Ref 'EC2Image'
   SecurityGroupId:
     Description: Group ID of the newly created EC2 security group
     Value: EC2SecurityGroup
+    Export: 
+      Name: !Sub ${AWS::StackName}-SecurityGroupId
   AZ1:
     Description: Availability Zone of the newly created EC2 instance
     Value: !GetAtt [EC2Instance1, AvailabilityZone]
   PrivateDnsName1:
     Description: Private DNSName of the newly created EC2 instance
     Value: !GetAtt [EC2Instance1, PrivateDnsName]
+    #Export: 
+      #Name: !Sub ${AWS::StackName}-PrivateDnsName1
   PrivateIp1:
     Description: Private IP address of the newly created EC2 instance
     Value: !GetAtt [EC2Instance1, PrivateIp]
+    #Export: 
+      #Name: !Sub ${AWS::StackName}-PrivateIp1
   # PublicDNS:
   #   Description: Public DNSName of the newly created EC2 instance
   #   Value: !GetAtt [EC2Instance1, PublicDnsName]

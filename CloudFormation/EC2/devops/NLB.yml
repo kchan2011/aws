@@ -1,0 +1,103 @@
+# https://jvzoggel.com/2018/08/29/example-aws-cloudformation-template-for-network-load-balancer/
+# https://github.com/aws-samples/ecs-refarch-cloudformation/blob/master/infrastructure/load-balancers.yaml
+# https://stackoverflow.com/questions/63583272/aws-how-do-i-create-a-network-load-balancer-target-group-using-cloudformation
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-elasticloadbalancingv2-targetgroup.html
+# https://grapeup.com/blog/automating-your-enterprise-infrastructure-part-2-cloud-infrastructure-as-code/
+
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  Template creates a Network Load Balancer in 2 AZs with listening on TCP
+  port 9000. There are no registered targets these would either be EC2 instance
+  IDs added to the targets property of the target group  or defined under the
+  autoscaling group resources  
+Parameters:
+  Env:
+    Description: Application Envirnoment Type
+    Type: String
+    ConstraintDescription: must specify POC, Test, Dev, QA, UAT, PreProd, Staging, Prod.
+    #Default: Dev
+  # Vpc:
+  #   Type: "List<AWS::EC2::VPC::Id>"
+  #   Default: vpc-07c9b85d62b6f4a7f
+  #   Description: VpcId of your existing Virtual Private Cloud (VPC)
+  #   ConstraintDescription: must be the VPC Id of an existing Virtual Private Cloud.
+  # PrivateSubnet1:
+  #   # Type: AWS::EC2::Subnet::Id
+  #   Type: "List<AWS::EC2::Subnet::Id>"
+  #   Default: subnet-0c6790c3ecaffce32
+  #   Description: SubnetId of an existing subnet (for the primary network) in your Virtual Private Cloud (VPC)
+  #   ConstraintDescription: must be an existing subnet in the selected Virtual Private Cloud.
+  ECInstanceID:
+    Type: String
+    Default: i-0aed50992ac72a447
+  ELBType:
+    Type: String
+    Default: network
+  ELBIpAddressType:
+    Type: String
+    Default: ipv4
+
+Resources:
+  LoadBalancer:
+    Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
+    Properties:
+      #IpAdressType: ipv4
+      Name: !Sub SonarQubeLB-${Env}-cfn
+      Scheme: internal
+      Type: network
+      Subnets: 
+        # - !Ref PrivateSubnet1
+        - subnet-0c6790c3ecaffce32  #us-east-1a
+        - subnet-0d5faa025dde79b24  #us-east-1b
+
+      Tags:
+        - Key: Name
+          Value: NLB-SonarQube-cfn
+        - Key: Env
+          Value: !Ref Env
+
+  LoadBalancerListener:
+    Type: "AWS::ElasticLoadBalancingV2::Listener"
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: TCP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref DefaultTargetGroup
+
+  DefaultTargetGroup:
+    Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
+    Properties:
+      Name:  !Sub SonarQubeTargets-${Env}-cfn
+      VpcId: vpc-07c9b85d62b6f4a7f
+      Port: 9000
+      Protocol: TCP
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: '30'
+      Targets:
+        #- Id: !Ref ECInstanceID
+        - Id: i-03ec86ebd8d723bc0
+          Port: 9000
+        - Id: i-05e0fdb30cee21a4f
+          Port: 9000
+      Tags:
+        - Key: Name
+          Value: NLB-SonarQube-Target-cfn
+        - Key: Env
+          Value: !Ref 'Env'
+
+# Outputs:
+#   LoadBalancer:
+#     Description: A reference to the Application Load Balancer
+#     Value: !Ref LoadBalancer
+
+#   LoadBalancerUrl:
+#     Description: The URL of the ALB
+#     Value: !GetAtt LoadBalancer.DNSName
+
+#   Listener:
+#     Description: A reference to a port 80 listener
+#     Value: !Ref LoadBalancerListener
+

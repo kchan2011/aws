@@ -18,15 +18,31 @@ aws cloudformation deploy --template-file C:\downloads\github\aws\CloudFormation
 =========================
 aws cloudformation deploy --template-file <value> --stack-name <value> 
 
-SET Env=POC
-SET KeyName=kevinchanSMBC
-aws cloudformation deploy --template-file C:\downloads\github\aws\CloudFormation\EC2\devops\SonarQube.yml --stack-name CM-SonarQube-%Env% --parameter-overrides KeyName=%KeyName% Env=%Env%
-
-
-SET Env=Dev
+SET Env=Prod
 SET KeyName=kevinchanSMBC
 aws cloudformation deploy --template-file C:\downloads\github\aws\CloudFormation\EC2\devops\AnsibleAWX.yml --stack-name CM-SonarQube-%Env% --parameter-overrides KeyName=%KeyName% Env=%Env%
 
+http://sonarqube-baf7250a6c5958fb.elb.us-east-1.amazonaws.com/about
+
+#####
+>aws cloudformation validate-template --template-body C:\downloads\github\aws\CloudFormation\EC2\devops\AnsibleAWX.yml
+
+SET Env=Prod1a
+SET KeyName=kevinchanSMBC
+SET sonarqubepassord=test12345
+aws cloudformation deploy --template-file C:\downloads\github\aws\CloudFormation\EC2\devops\AnsibleAWX.yml --stack-name CM-SonarQube-%Env% --parameter-overrides KeyName=%KeyName% Env=%Env% SonarQubePassword=%sonarqubepassord%
+
+SET Env=Prod1b
+SET KeyName=kevinchanSMBC
+SET sonarqubepassord=test12345
+aws cloudformation deploy --template-file C:\downloads\github\aws\CloudFormation\EC2\devops\AnsibleAWX.yml --stack-name CM-SonarQube-%Env% --parameter-overrides KeyName=%KeyName% Env=%Env% SonarQubePassword=%sonarqubepassord%
+
+
+SET Env=Prod
+aws cloudformation deploy --template-file C:\downloads\github\aws\CloudFormation\EC2\devops\NLB.yml --stack-name CM-SonarQube-NLB-%Env% --parameter-overrides Env=%Env%            
+
+
+######
 ======
 
 SET Env=Dev
