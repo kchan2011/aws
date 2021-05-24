@@ -34,22 +34,24 @@ Parameters:
     Type: AWS::EC2::KeyPair::KeyName
     ConstraintDescription: must be the name of an existing EC2 KeyPair.
   Vpc:
-    Type: "List<AWS::EC2::VPC::Id>"
+    #Type: "List<AWS::EC2::VPC::Id>"
+    Type: AWS::EC2::VPC::Id
     Default: vpc-07c9b85d62b6f4a7f
     Description: VpcId of your existing Virtual Private Cloud (VPC)
     ConstraintDescription: must be the VPC Id of an existing Virtual Private Cloud.
   PrivateSubnet1a:
-    # Type: AWS::EC2::Subnet::Id
-    Type: String
+    Type: AWS::EC2::Subnet::Id
+    # Type: String
     Default: subnet-0c6790c3ecaffce32 # us-east-1a
     Description: SubnetId of an existing subnet in 1 in your VPC
     ConstraintDescription: must be an existing subnet in the selected Virtual Private Cloud.
   PrivateSubnet1b:
-    # Type: AWS::EC2::Subnet::Id
-    Type: String
+    Type: AWS::EC2::Subnet::Id
+    #Type: String
     Default: subnet-0d5faa025dde79b24 # us-east-1b
     Description: SubnetId of an existing subnet in AZ2 in your VPC
     ConstraintDescription: must be an existing subnet in the selected Virtual Private Cloud.
+ 
   SSHLocation:
     Description: The IP address range that can be used to SSH to the EC2 instances
     Type: String
@@ -75,9 +77,10 @@ Parameters:
     Default: EC2SSM
     ConstraintDescription: Type in EC2 IAM
   SonarQubePassword:
+    NoEcho: true
     Type: String
     Default: Sonar
-    ConstraintDescription: Type in EC2 IAM
+
 Conditions:
   CreateDevResources:    !Equals [!Ref Env, "Dev"]
   CreateUATResources:    !Equals [!Ref Env, "UAT"]
@@ -87,10 +90,37 @@ Conditions:
 
   CreateEC2_Ubuntu20.04LTS_CIS: !Equals [!Ref EC2Image, "CIS Ubuntu Linux 20.04 LTS Benchmark" ]
   CreateEC2_Ubuntu20.04LTS:     !Equals [!Ref EC2Image, "Ubuntu Pro 20.04 LTS" ]
+  
+  CreateDevEBSVolType:  !Equals [!Ref Env, "Dev"]
+  CreateUATEBSVolType:  !Equals [!Ref Env, "UAT"]
+  CreateProdEBSVolType: !Or [!Equals [!Ref Env, "Prod1a"], !Equals [!Ref Env, "Prod1b"]]
 
 Resources:
   # https://computingforgeeks.com/configure-aws-application-load-balancer-with-cloudformation/
   # https://stackoverflow.com/questions/63118516/aws-cloudformation-target-group-for-application-load-balancer-is-not-working-fo
+
+  AppsVolume:
+    Type: AWS::EC2::Volume
+    Properties:
+      Size: !If [CreateProdResources, 10, !If [CreateDevResources, 8, 8]]  
+      AvailabilityZone: !GetAtt EC2Instance1.AvailabilityZone
+      Encrypted:  true
+      VolumeType: !If [CreateProdResources, gp3, !If [CreateDevResources, gp2, gp2] ]  
+      Tags:
+        - Key: Name
+          Value: !Join ['-', [ !Ref 'AWS::StackName', 'cfn' ]]
+        - Key: Env
+          Value: !Ref 'Env'
+        - Key: OwnerContact
+          Value: "nydevops@smbc-cm.com"
+    DeletionPolicy: Retain
+
+  MountPoint:
+      Type: AWS::EC2::VolumeAttachment
+      Properties:
+        InstanceId: !Ref EC2Instance1
+        VolumeId: !Ref AppsVolume
+        Device: /dev/sdf
 
   EC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -109,11 +139,7 @@ Resources:
           FromPort: -1
           ToPort: -1
           CidrIp: 0.0.0.0/0
-        # - IpProtocol: tcp
-        #   FromPort: 5432
-        #   ToPort: 5432
-        #   CidrIp: 0.0.0.0/0
-      VpcId: vpc-07c9b85d62b6f4a7f
+      VpcId: !Ref Vpc
 
   EC2Instance1:
     Type: AWS::EC2::Instance
@@ -121,6 +147,8 @@ Resources:
     # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-init.html
     # https://aws.amazon.com/premiumsupport/knowledge-center/cloudformation-helper-scripts-windows/
     # https://stackoverflow.com/questions/39760158/ubuntu-could-not-enable-service-cfn-hup
+    # https://docs.eucalyptus.cloud/eucalyptus/4.4.5/cloudformation/cf_templates.html
+    # https://dev.to/tiamatt/hands-on-aws-cloudformation-part-3-intrinsic-functions-in-action-5hj2
     Metadata:
       AWS::CloudFormation::Init:
         configSets:
@@ -139,8 +167,11 @@ Resources:
           files: 
             /var/www/html/index.html: 
               content: !Sub |
-                Hello World ${Env} - ${EC2Instance1}
-            /home/root/docker-compose.yml:
+                Hello World ${Env}
+              mode: 000644
+              owner: root
+              group: root
+            /home/root/docker-compose.yml:            
               content: !Sub |
                 version: "3"
                 services:
@@ -173,6 +204,9 @@ Resources:
                     volumes:
                       - /apps/postgres/psql:/var/lib/postgresql
                       - /apps/postgres/data:/var/lib/postgresql/data
+              mode: 000644
+              owner: root
+              group: root
         cfn-hup:
           files:
             /etc/cfn/cfn-hup.conf:
@@ -190,6 +224,7 @@ Resources:
             # https://cfn101.workshop.aws/30-workshop-part-01/30-launching-ec2/400-lab-09-helper-scripts.html
             # https://gist.github.com/kixorz/10194688
             # https://gist.github.com/mmasko/66d34b651642525c63cd39251e0c2a8b
+            # https://raw.githubusercontent.com/awslabs/aws-cloudformation-templates/master/aws/solutions/AmazonCloudWatchAgent/inline/amazon_linux.template
             /etc/cfn/hooks.d/cfn-auto-reloader.conf:
               content: !Sub |
                 [cfn-auto-reloader-hook]
@@ -213,11 +248,9 @@ Resources:
               mode: 000400
               owner: root
               group: root
-
           commands:
             01_update_rc:
-              command: "update-rc.d cfn-hup defaults" 
-        
+              command: "update-rc.d cfn-hup defaults"        
           sysvinit:
             docker:
               enabled: true
@@ -228,24 +261,25 @@ Resources:
               files:
                 - /etc/cfn/cfn-hup.conf
                 - /etc/cfn/hooks.d/cfn-auto-reloader.conf
-
           commands:
             02_start_cfn-hup:
               command: "systemctl start cfn-hup.service"
             03_mkdir_apps:
               command: mkdir /apps
             04_format_apps_vol:
-              #command: mkfs.ext4 /dev/xvdf
-              command: mkfs.ext4 /dev/nvme1n1
+              command: !If [CreateProdResources, mkfs.ext4 /dev/nvme1n1 > /home/root/mkfs_vol.log, mkfs.ext4 /dev/xvdf > /home/root/mkfs_vol.log]
             05_mount_apps_vol:
-              #command: mount /dev/xvdf /apps  # t3mirco
-              command: mount /dev/nvme1n1 /apps  # m3
-            # 06_docker_compose_check:
-            #   command: docker-compose --version >/dev/null 2>&1; (( $? != 0 ))
+              command: !If [CreateProdResources, mount /dev/nvme1n1 /apps > /home/root/mount_vol.log, mount /dev/xvdf /apps > /home/root/mount_vol.log]
             06_vm_max_map_count:
               command: sysctl -w vm.max_map_count=262144
-            07_docker_compose_up:
-              command: cd /home/root && docker-compose up -d
+            07_mount_tmp:
+              # docker-compose: error while loading shared libraries: libz.so.1: failed to map segment from shared object
+              command: !If [CreateEC2_Ubuntu20.04LTS_CIS, 'mount /tmp -o remount,exec /apps > /home/root/mount_tmp.log', 'echo Non CIS AMI, Skip mount tmp > /home/root/mount_tmp.log']
+            08_docker_compose_up:
+              command: !If [CreateProdResources, cd /home/root && docker-compose up -d && docker ps -a > /home/root/docker-compose.log, echo Skip docker-compose > /home/root/docker-compose.log]
+    # CreationPolicy:
+    #   ResourceSignal:
+    #     Timeout: PT5M
 
     # ImageId: !Ref 'LatestAmiId' # https://octopus.com/blog/aws-cloudformation-ec2-examples
     # CIS Ubuntu Linux 20.04 LTS Benchmark - Level 1 - ami-0de8ae0e6d86b93c8
@@ -258,15 +292,15 @@ Resources:
       ImageId: !If [CreateEC2_Ubuntu20.04LTS_CIS, ami-0de8ae0e6d86b93c8, !If [CreateEC2_Ubuntu20.04LTS, ami-0ed28656d62ce20d6, ami-0ed28656d62ce20d6] ]  
 
       # InstanceType: !Ref 'InstanceType'
-      InstanceType: !If [CreateProdResources, m5.large,  !If [CreateDevResources, t2.micro, t3.large] ]  
+      InstanceType: !If [CreateProdResources, m5.large, !If [CreateDevResources, t2.micro, t3.large] ]  
 
       KeyName: !Ref 'KeyName'
       IamInstanceProfile: !Ref 'EC2Iam'
       # Monitoring: true
-      # Monitoring: false 
+      # Monitoring: false
       # SubnetId: subnet-0d5faa025dde79b24
       SubnetId: !If [CreateProd1bResources, !Ref PrivateSubnet1b, !Ref PrivateSubnet1a ]
-
+     
       SecurityGroupIds:
         - !Ref EC2SecurityGroup
       # https://aws.amazon.com/blogs/infrastructure-and-automation/amazon-s3-authenticated-bootstrapping-in-aws-cloudformation/
@@ -302,6 +336,7 @@ Resources:
       # https://stackoverflow.com/questions/41073906/how-to-attach-and-mount-volumes-to-an-ec2-instance-using-cloudformation
       # https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ebs-using-volumes.html
       # https://hangarau.space/automatically-mounting-an-ebs-volume-using-ansible/
+      # https://www.derpturkey.com/ec2-cloudformation-example/
       # lsblk -f / blkid
       # mkdir /apps
       # mkfs.ext4 /dev/xvdf, mkfs.ext4 /dev/nvme1n1    
@@ -310,51 +345,53 @@ Resources:
       BlockDeviceMappings:
         - DeviceName: "/dev/sda1"
           Ebs:
-            VolumeSize: 20
-            VolumeType: gp3
-            Encrypted: true
-        - DeviceName: "/dev/sdf"
-          Ebs:
-            VolumeSize: 8
-            VolumeType: gp3
-            Encrypted: true
-            DeleteOnTermination: true
-            # DeleteOnTermination: false
-            # AutoEnableIO: true
-            # MultiAttachEnabled: false
-
+            VolumeSize: !If [CreateProdResources, 20,  !If [CreateDevResources, 20, 20] ]  
+            VolumeType: !If [CreateProdResources, gp3, !If [CreateDevResources, gp2, gp2] ]  
+            Encrypted:  true
+        # https://github.com/kbild/AWS_Cloudformation_Examples/blob/master/Volume_Tagging/createEC2instance_and_tag_volume.yaml
       Tags:
         - Key: Name
-          Value: !Join ['-', [ !Ref 'AWS::StackName', 'cfn' ] ]
-          # Value: !Ref 'AWS::StackName'
+          Value: !Join ['-', [ !Ref 'AWS::StackName', 'cfn' ]]
         - Key: Env
           Value: !Ref 'Env'
         - Key: OwnerContact
           Value: "nydevops@smbc-cm.com"
-
-      # CreationPolicy:
-      #   ResourceSignal:
-      #     Timeout: PT7M
 
 Outputs:
   Env:
     Description: EC2 instance Environment
     Value: !Ref 'Env'
   InstanceId1:
-    Description: InstanceId of the newly created EC2 instance
+    Description: InstanceId of the EC2 instance
     Value: !Ref 'EC2Instance1'
+    Export:
+      Name: 
+        Fn::Sub: "${AWS::StackName}-InstanceId1"
+  AppsVolumeId:
+    Description: Apps Volume ID of EC2 instance
+    Value: !Ref 'AppsVolume'
+        
   SecurityGroupId:
-    Description: Group ID of the newly created EC2 security group
+    Description: Group ID of the EC2 security group
     Value: EC2SecurityGroup
   AZ1:
-    Description: Availability Zone of the newly created EC2 instance
+    Description: Availability Zone of the EC2 instance
     Value: !GetAtt [EC2Instance1, AvailabilityZone]
   PrivateDnsName1:
     Description: Private DNSName of the newly created EC2 instance
     Value: !GetAtt [EC2Instance1, PrivateDnsName]
+  URL:
+    Description: URL of EC2 instance
+    Value: !Join ['', [ 'http://', !GetAtt [EC2Instance1, PrivateIp] ]]
   PrivateIp1:
-    Description: Private IP address of the newly created EC2 instance
+    Description: Private IP address of the EC2 instance
     Value: !GetAtt [EC2Instance1, PrivateIp]
+    Export:
+      Name: 
+        Fn::Sub: "${AWS::StackName}-PrivateIp1"
+
+
+
   # PublicDNS:
   #   Description: Public DNSName of the newly created EC2 instance
   #   Value: !GetAtt [EC2Instance1, PublicDnsName]

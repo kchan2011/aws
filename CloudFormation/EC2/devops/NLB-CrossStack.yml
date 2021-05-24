@@ -15,28 +15,15 @@ Parameters:
     Description: Application Envirnoment Type
     Type: String
     ConstraintDescription: must specify POC, Test, Dev, QA, UAT, PreProd, Staging, Prod.
-    #Default: Dev
-  # Vpc:
-  #   Type: "List<AWS::EC2::VPC::Id>"
-  #   Default: vpc-07c9b85d62b6f4a7f
-  #   Description: VpcId of your existing Virtual Private Cloud (VPC)
-  #   ConstraintDescription: must be the VPC Id of an existing Virtual Private Cloud.
-  # PrivateSubnet1:
-  #   # Type: AWS::EC2::Subnet::Id
-  #   Type: "List<AWS::EC2::Subnet::Id>"
-  #   Default: subnet-0c6790c3ecaffce32
-  #   Description: SubnetId of an existing subnet (for the primary network) in your Virtual Private Cloud (VPC)
-  #   ConstraintDescription: must be an existing subnet in the selected Virtual Private Cloud.
-  ECInstanceID:
+    Default: Prod
+  EC2Stack1a:
+    Description: EC2 instance Source Stack Name in AZ1 Subnet1a
     Type: String
-    Default: i-0aed50992ac72a447
-  ELBType:
+    Default: CM-SonarQube-Prod1a
+  EC2Stack1b:
+    Description: EC2 instance Source Stack Name in AZ2 Subnet1b
     Type: String
-    Default: network
-  ELBIpAddressType:
-    Type: String
-    Default: ipv4
-
+    Default: CM-SonarQube-Prod1b
 Resources:
   LoadBalancer:
     Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
@@ -49,7 +36,6 @@ Resources:
         # - !Ref PrivateSubnet1
         - subnet-0c6790c3ecaffce32  #us-east-1a
         - subnet-0d5faa025dde79b24  #us-east-1b
-
       Tags:
         - Key: Name
           Value: NLB-SonarQube-cfn
@@ -78,9 +64,15 @@ Resources:
           Value: '30'
       Targets:
         #- Id: !Ref ECInstanceID
-        - Id: i-0b592521a7dc38525
+        #- Id: i-0b592521a7dc38525
+        - Id: 
+            Fn::ImportValue:
+              Fn::Sub: "${EC2Stack1a}-InstanceId1"
           Port: 9000
-        - Id: i-0c55522ff0ecf435e
+        #- Id: i-0c55522ff0ecf435e
+        - Id:
+            Fn::ImportValue:
+              Fn::Sub: "${EC2Stack1b}-InstanceId1" 
           Port: 9000
       Tags:
         - Key: Name
@@ -100,4 +92,3 @@ Resources:
 #   Listener:
 #     Description: A reference to a port 80 listener
 #     Value: !Ref LoadBalancerListener
-
