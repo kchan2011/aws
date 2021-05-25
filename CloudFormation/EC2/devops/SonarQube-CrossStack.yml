@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Create an EC2 instances running a Ubuntu AMI to host AWX containers. 
-One EBS volume will be created and mounted to the active EC2 instance with running containers.  The AMI is chosen based on the region in which the stack is run.'
+Description: 'Create an EC2 instance running a Ubuntu AMI to host SonarQube and PostgresSQL containers. 
+One EBS volume will be created and mounted for apps volumeto to host container volumes.'
 Metadata:
   AWS::CloudFormation::Interface: 
     ParameterGroups: 
@@ -361,6 +361,25 @@ Outputs:
   Env:
     Description: EC2 instance Environment
     Value: !Ref 'Env'
+    Export:
+      Name: 
+        Fn::Sub: "${AWS::StackName}-Env"
+  VpcId:
+    Description: Vpc ID of EC2 instance
+    Value: !Ref 'Vpc'
+    Export:
+      Name: 
+        Fn::Sub: "${AWS::StackName}-Vpc"
+  PrivateSubnet1a:
+    Value: !Ref 'PrivateSubnet1a'
+    Export:
+      Name: 
+        Fn::Sub: "${AWS::StackName}-PrivateSubnet1a"
+  PrivateSubnet1b:
+    Value: !Ref 'PrivateSubnet1b'
+    Export:
+      Name: 
+        Fn::Sub: "${AWS::StackName}-PrivateSubnet1b"
   InstanceId1:
     Description: InstanceId of the EC2 instance
     Value: !Ref 'EC2Instance1'

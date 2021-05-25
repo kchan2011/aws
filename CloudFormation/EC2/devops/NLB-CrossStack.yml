@@ -28,17 +28,17 @@ Resources:
   LoadBalancer:
     Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
     Properties:
-      #IpAdressType: ipv4
       Name: !Sub SonarQubeLB-${Env}-cfn
       Scheme: internal
       Type: network
       Subnets: 
-        # - !Ref PrivateSubnet1
-        - subnet-0c6790c3ecaffce32  #us-east-1a
-        - subnet-0d5faa025dde79b24  #us-east-1b
+        - Fn::ImportValue:
+              Fn::Sub: "${EC2Stack1a}-PrivateSubnet1a"   #us-east-1a
+        - Fn::ImportValue:
+              Fn::Sub: "${EC2Stack1b}-PrivateSubnet1b"   #us-east-1b
       Tags:
         - Key: Name
-          Value: NLB-SonarQube-cfn
+          Value: SonarQube-NLB-cfn
         - Key: Env
           Value: !Ref Env
 
@@ -56,9 +56,13 @@ Resources:
     Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
     Properties:
       Name:  !Sub SonarQubeTargets-${Env}-cfn
-      VpcId: vpc-07c9b85d62b6f4a7f
+      VpcId:
+        Fn::ImportValue:
+          Fn::Sub: "${EC2Stack1a}-Vpc"
       Port: 9000
       Protocol: TCP
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
       TargetGroupAttributes:
         - Key: deregistration_delay.timeout_seconds
           Value: '30'
@@ -76,7 +80,7 @@ Resources:
           Port: 9000
       Tags:
         - Key: Name
-          Value: NLB-SonarQube-Target-cfn
+          Value: SonarQube-NLB-Target-cfn
         - Key: Env
           Value: !Ref 'Env'
 
