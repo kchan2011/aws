@@ -14,16 +14,28 @@ Parameters:
   Env:
     Description: Application Envirnoment Type
     Type: String
-    ConstraintDescription: must specify POC, Test, Dev, QA, UAT, PreProd, Staging, Prod.
+    ConstraintDescription: must specify Dev, UAT, Prod.
     Default: Prod
+  AppsName:
+    Description: Application Stack Name
+    Type: String
+    Default: SonarQube
   EC2Stack1a:
     Description: EC2 instance Source Stack Name in AZ1 Subnet1a
     Type: String
-    Default: CM-SonarQube-Prod1a
+    Default: CM-SonarQube-Apps-Prod1a
   EC2Stack1b:
     Description: EC2 instance Source Stack Name in AZ2 Subnet1b
     Type: String
-    Default: CM-SonarQube-Prod1b
+    Default: CM-SonarQube-Apps-Prod1b
+  LBPort:
+    Description: LB instance TCP Port Number
+    Type: String
+    Default: 80
+  TargetAppsPort:
+    Description: Target Apps instance TCP Port Number
+    Type: String
+    Default: 9000
 Resources:
   LoadBalancer:
     Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
@@ -38,7 +50,7 @@ Resources:
               Fn::Sub: "${EC2Stack1b}-PrivateSubnet1b"   #us-east-1b
       Tags:
         - Key: Name
-          Value: SonarQube-NLB-cfn
+          Value: !Sub ${AppsName}-NLB-cfn
         - Key: Env
           Value: !Ref Env
 
@@ -46,7 +58,7 @@ Resources:
     Type: "AWS::ElasticLoadBalancingV2::Listener"
     Properties:
       LoadBalancerArn: !Ref LoadBalancer
-      Port: 80
+      Port: !Ref LBPort
       Protocol: TCP
       DefaultActions:
         - Type: forward
@@ -55,11 +67,11 @@ Resources:
   DefaultTargetGroup:
     Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
     Properties:
-      Name:  !Sub SonarQubeTargets-${Env}-cfn
+      Name:  !Sub ${AppsName}Targets-${Env}-cfn
       VpcId:
         Fn::ImportValue:
           Fn::Sub: "${EC2Stack1a}-Vpc"
-      Port: 9000
+      Port: !Ref TargetAppsPort
       Protocol: TCP
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 2
@@ -68,31 +80,27 @@ Resources:
           Value: '30'
       Targets:
         #- Id: !Ref ECInstanceID
-        #- Id: i-0b592521a7dc38525
         - Id: 
             Fn::ImportValue:
               Fn::Sub: "${EC2Stack1a}-InstanceId1"
-          Port: 9000
-        #- Id: i-0c55522ff0ecf435e
+          Port: !Ref TargetAppsPort
         - Id:
             Fn::ImportValue:
               Fn::Sub: "${EC2Stack1b}-InstanceId1" 
-          Port: 9000
+          Port: !Ref TargetAppsPort
       Tags:
         - Key: Name
-          Value: SonarQube-NLB-Target-cfn
+          Value: !Sub ${AppsName}-NLB-Target-cfn
         - Key: Env
           Value: !Ref 'Env'
 
-# Outputs:
-#   LoadBalancer:
-#     Description: A reference to the Application Load Balancer
-#     Value: !Ref LoadBalancer
-
-#   LoadBalancerUrl:
-#     Description: The URL of the ALB
-#     Value: !GetAtt LoadBalancer.DNSName
-
-#   Listener:
-#     Description: A reference to a port 80 listener
-#     Value: !Ref LoadBalancerListener
+Outputs:
+  LoadBalancer:
+    Description: A reference to the Network Load Balancer
+    Value: !Ref LoadBalancer
+  LoadBalancerUrl:
+    Description: The URL of the NLB
+    Value: !GetAtt LoadBalancer.DNSName
+  Listener:
+    Description: A reference to a port listener
+    Value: !Ref LoadBalancerListener

@@ -1,0 +1,334 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Create an EC2 instances running a Ubuntu AMI to host Jfrog Artifactory OSS container. 
+One EBS volume will be created and mounted to the active EC2 instance with running containers.  The AMI is chosen based on the region in which the stack is run.'
+Metadata:
+  AWS::CloudFormation::Interface: 
+    ParameterGroups: 
+      - Label: 
+          default: "Network Configuration"
+        Parameters: 
+          - Vpc
+          - PrivateSubnet1a
+          - PrivateSubnet1b
+          - SecurityGroupID
+          - SSHLocation
+      - Label: 
+          default: "Amazon EC2 Configuration"
+        Parameters:
+          - Env
+          - KeyName
+          - LatestAmiId
+    ParameterLabels: 
+      Vpc: 
+        default: "Which VPC should this be deployed to?"
+
+Parameters:
+  Env:
+    Description: Application Envirnoment Type
+    Type: String
+    ConstraintDescription: must specify POC, Test, Dev, QA, UAT, PreProd, Staging, Prod1a, Prod1b.
+    #Default: Dev
+    AllowedValues: [Dev, UAT, Prod1a, Prod1b]
+  AppsVolumeProvision:
+    Description: Apps Provison Type
+    Type: String
+    ConstraintDescription: must specify New for new apps volume or Update for mount existing apps volume.
+    Default: Update
+    AllowedValues: [New, Update]
+
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instance
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+  Vpc:
+    Type: "List<AWS::EC2::VPC::Id>"
+    Default: vpc-07c9b85d62b6f4a7f
+    Description: VpcId of your existing Virtual Private Cloud (VPC)
+    ConstraintDescription: must be the VPC Id of an existing Virtual Private Cloud.
+  PrivateSubnet1a:
+    # Type: AWS::EC2::Subnet::Id
+    Type: String
+    Default: subnet-0c6790c3ecaffce32 # us-east-1a
+    Description: SubnetId of an existing subnet in 1 in your VPC
+    ConstraintDescription: must be an existing subnet in the selected Virtual Private Cloud.
+  PrivateSubnet1b:
+    # Type: AWS::EC2::Subnet::Id
+    Type: String
+    Default: subnet-0d5faa025dde79b24 # us-east-1b
+    Description: SubnetId of an existing subnet in AZ2 in your VPC
+    ConstraintDescription: must be an existing subnet in the selected Virtual Private Cloud.
+ 
+  SSHLocation:
+    Description: The IP address range that can be used to SSH to the EC2 instances
+    Type: String
+    MinLength: 9
+    MaxLength: 18
+    # Default: 0.0.0.0/0
+    Default: 67.82.52.94/32
+    AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})
+    ConstraintDescription: must be a valid IP CIDR range of the form x.x.x.x/x.
+  EC2Image:
+    Type: String
+    Default: 'Ubuntu Pro 20.04 LTS'
+    ConstraintDescription: Select EC2 Instance AMI
+    AllowedValues: ['CIS Ubuntu Linux 20.04 LTS Benchmark', 'Ubuntu Pro 20.04 LTS']
+  EC2Iam:
+    Type: String
+    Default: EC2SSM
+    ConstraintDescription: Type in EC2 IAM
+  SonarQubePassword:
+    Type: String
+    Default: Sonar
+
+Conditions:
+  isDevResources:    !Equals [!Ref Env, "Dev"]
+  isUATResources:    !Equals [!Ref Env, "UAT"]
+  isProd1aResources: !Equals [!Ref Env, "Prod1a"]
+  isProd1bResources: !Equals [!Ref Env, "Prod1b"]
+  isProdResources:   !Or [!Equals [!Ref Env, "Prod1a"], !Equals [!Ref Env, "Prod1b"]]
+
+  isEC2_Ubuntu20.04LTS_CIS: !Equals [!Ref EC2Image, "CIS Ubuntu Linux 20.04 LTS Benchmark" ]
+  isEC2_Ubuntu20.04LTS:     !Equals [!Ref EC2Image, "Ubuntu Pro 20.04 LTS" ]
+  
+  isNewEBSAppsVol:  !Equals [!Ref AppsVolumeProvision, "New"]
+Resources:
+  # https://computingforgeeks.com/configure-aws-application-load-balancer-with-cloudformation/
+  # https://stackoverflow.com/questions/63118516/aws-cloudformation-target-group-for-application-load-balancer-is-not-working-fo
+  MountPoint:
+      Type: AWS::EC2::VolumeAttachment
+      Properties:
+        InstanceId: !Ref EC2Instance1
+        VolumeId: 
+          Fn::ImportValue:
+            Fn::Sub: "CM-Jfrog-Artifactory-EBS-${Env}-VolumeId"
+        Device: /dev/sdf
+        
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Jfrog Artifactory SG
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8081
+          ToPort: 8081
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 8082
+          ToPort: 8082
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 0.0.0.0/0
+      VpcId: vpc-07c9b85d62b6f4a7f
+
+  EC2Instance1:
+    Type: AWS::EC2::Instance
+    # CreationPolicy:
+    #   ResourceSignal:
+    #     Timeout: PT5M
+
+    # https://linuxtut.com/en/8ff718cd1e66778f88b5/
+    # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-init.html
+    # https://aws.amazon.com/premiumsupport/knowledge-center/cloudformation-helper-scripts-windows/
+    # https://stackoverflow.com/questions/39760158/ubuntu-could-not-enable-service-cfn-hup
+    # https://www.jfrog.com/confluence/pages/viewpage.action?pageId=59082309
+    Metadata:
+      AWS::CloudFormation::Init:
+        configSets:
+          full_install: [ "install_apps", "cfn-hup" ]
+        install_apps:          
+          packages: 
+            apt:
+              net-tools: []
+              inetutils-traceroute: []
+              # apache2: []
+              tmux: []
+              mc: []
+              nvme-cli: []
+              docker.io: []
+              docker-compose: []
+        cfn-hup:
+          files:
+            /etc/cfn/cfn-hup.conf:
+              content: !Sub |
+                [main]
+                stack=${AWS::StackId}
+                region=${AWS::Region}
+                interval=1
+              mode: 000400
+              owner: root
+              group: root
+            # https://github.com/villasv/aws-airflow-stack/issues/72
+            # https://stackoverflow.com/questions/39760158/ubuntu-could-not-enable-service-cfn-hup
+            # https://www.atcomputing.nl/blog/aws-cloudformation-updating-ec2-instance-with-cfn-hup/
+            # https://cfn101.workshop.aws/30-workshop-part-01/30-launching-ec2/400-lab-09-helper-scripts.html
+            # https://gist.github.com/kixorz/10194688
+            # https://gist.github.com/mmasko/66d34b651642525c63cd39251e0c2a8b
+            # https://raw.githubusercontent.com/awslabs/aws-cloudformation-templates/master/aws/solutions/AmazonCloudWatchAgent/inline/amazon_linux.template
+            /etc/cfn/hooks.d/cfn-auto-reloader.conf:
+              content: !Sub |
+                [cfn-auto-reloader-hook]
+                triggers=post.update
+                path=Resources.EC2Instance1.Metadata.AWS::CloudFormation::Init
+                action=/opt/aws/bin/cfn-init --stack ${AWS::StackName} --resource EC2Instance1 --region ${AWS::Region}
+                runas=root
+            #systemd service 
+            /etc/systemd/system/cfn-hup.service: 
+              content: |
+                [Unit]
+                Description=CloudFormation helper daemon
+
+                [Service]
+                ExecStart=/opt/aws/bin/cfn-hup
+                Restart=always
+                Type=simple
+
+                [Install]
+                WantedBy=multi-user.target
+              mode: 000400
+              owner: root
+              group: root
+          commands:
+            01_update_rc:
+              command: "update-rc.d cfn-hup defaults"        
+          sysvinit:
+            docker:
+              enabled: true
+              ensureRunning: true
+            cfn-hup:
+              enabled: true
+              ensureRunning: true
+              files:
+                - /etc/cfn/cfn-hup.conf
+                - /etc/cfn/hooks.d/cfn-auto-reloader.conf
+          commands:
+            02_start_cfn-hup:
+              command: "systemctl start cfn-hup.service"
+            03_mkdir_apps:
+              command: mkdir /apps && mkdir /home/root
+            04_format_apps_vol:
+              # command: !If [isNewEBSAppsVol, !If [isProdResources, mkfs.ext4 /dev/nvme1n1 > /home/root/mkfs_vol.log, mkfs.ext4 /dev/xvdf > /home/root/mkfs_vol.log], echo Skip Format]
+              command: !If [isNewEBSAppsVol, mkfs.ext4 /dev/nvme1n1 > /home/root/mkfs_vol.log, echo Skip format apps volume > /home/root/mkfs_vol.log]
+            05_mount_apps_vol:
+              # command: !If [isProdResources, mount /dev/nvme1n1 /apps > /home/root/mount_vol.log, mount /dev/xvdf /apps > /home/root/mount_vol.log]
+              command: mount /dev/nvme1n1 /apps > /home/root/mount_vol.log
+            06_vm_max_map_count:
+              command: sysctl -w vm.max_map_count=262144
+            07_mount_tmp:
+              # docker-compose: error while loading shared libraries: libz.so.1: failed to map segment from shared object
+              command: !If [isEC2_Ubuntu20.04LTS_CIS, 'mount /tmp -o remount,exec /apps > /home/root/mount_tmp.log', 'echo Non CIS AMI, Skip mount tmp > /home/root/mount_tmp.log']
+            08_docker_compose_up:
+              # command: !If [isProdResources, cd /home/root && docker-compose up -d && docker ps -a > /home/root/docker-compose.log, echo Skip docker-compose > /home/root/docker-compose.log]
+              # command: cd /home/root && docker-compose up -d && docker ps -a > /home/root/docker-compose.log
+              command: docker run --name artifactory -v /apps/jfrog/artifactory:/var/opt/jfrog/artifactory -p 8081:8081 -p 8082:8082 docker.bintray.io/jfrog/artifactory-pro:latest
+    
+    # CreationPolicy:
+    #   ResourceSignal:
+    #     Timeout: PT5M
+
+
+    # ImageId: !Ref 'LatestAmiId' # https://octopus.com/blog/aws-cloudformation-ec2-examples
+    # CIS Ubuntu Linux 20.04 LTS Benchmark - Level 1 - ami-0de8ae0e6d86b93c8
+    # https://aws.amazon.com/marketplace/server/configuration?productId=96863db2-ecac-4ad4-8d50-e63c424d6245&ref_=psb_cfg_continue
+    #
+    # Ubuntu Pro 20.04 LTS - ami-0ed28656d62ce20d6
+    # https://aws.amazon.com/marketplace/server/configuration?productId=ae7ed378-8838-4fcf-842d-d1d09b34f116&ref_=psb_cfg_continue
+    # DisableApiTermination: true
+    Properties:
+      ImageId: !If [isEC2_Ubuntu20.04LTS_CIS, ami-0de8ae0e6d86b93c8, !If [isEC2_Ubuntu20.04LTS, ami-0ed28656d62ce20d6, ami-0ed28656d62ce20d6]]  
+
+      # InstanceType: !Ref 'InstanceType'
+      # InstanceType: !If [isProdResources, m5.large, !If [isDevResources, t2.micro, t3.large]]  
+      InstanceType: !If [isProdResources, t2.micro, !If [isDevResources, t3.large, t3.large]]  
+
+      KeyName: !Ref 'KeyName'
+      IamInstanceProfile: !Ref 'EC2Iam'
+      # Monitoring: true
+      # Monitoring: false
+      # SubnetId: subnet-0d5faa025dde79b24
+      SubnetId: !If [isProd1bResources, !Ref PrivateSubnet1b, !Ref PrivateSubnet1a ]
+     
+      SecurityGroupIds:
+        - !Ref EC2SecurityGroup
+      # https://aws.amazon.com/blogs/infrastructure-and-automation/amazon-s3-authenticated-bootstrapping-in-aws-cloudformation/
+      # https://linuxtut.com/en/8ff718cd1e66778f88b5/
+      # Check /var/log/cloud-init-output.log to troubleshoot UserData 
+
+      UserData:
+        'Fn::Base64':
+          !Sub |
+            #!/bin/bash -xe
+            echo start to run userdata... > /var/log/userdata.log            
+            apt-get update
+            apt -y install python3-pip wget git curl
+            python3 -m easy_install --script-dir /opt/aws/bin https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-py3-latest.tar.gz
+            chmod +x /opt/aws/bin/cfn-init
+            echo start running cfn-init >> /var/log/userdata.log
+
+            # on Ubuntu server it expects it in /etc/systemd/system, /etc/init.d/ is for legacy files.
+            # ln -s /opt/aws/bin/cfn-hup /etc/init.d/cfn-hup
+            ln -s /usr/local/lib/python3.8/dist-packages/aws_cfn_bootstrap-2.0-py3.8.egg/init/ubuntu/cfn-hup /etc/init.d/cfn-hup
+            # Call cfn-init script to install files and packages
+            /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource EC2Instance1 --configsets full_install --region ${AWS::Region} || error_exit 'Failed to run cfn-init\n'
+            echo start running cfn-signal >> /var/log/userdata.log
+            # Call cfn-signal script to send a signal with exit code
+            /opt/aws/bin/cfn-signal --exit-code $? --stack ${AWS::StackName} --resource EC2Instance1 --region ${AWS::Region}
+
+      # To list volume, lsblk
+      # attached volume, https://docs.aws.amazon.com/cli/latest/reference/ec2/attach-volume.html
+      # aws ec2 attach-volume --volume-id vol-01ce5d247ed3a0524 --instance-id i-03b8e13dd609897bd --device /dev/xvdf
+      # https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/device_naming.html
+      # https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/nvme-ebs-volumes.html
+      # https://github.com/transferwise/ansible-ebs-automatic-nvme-mapping
+      # https://stackoverflow.com/questions/41073906/how-to-attach-and-mount-volumes-to-an-ec2-instance-using-cloudformation
+      # https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ebs-using-volumes.html
+      # https://hangarau.space/automatically-mounting-an-ebs-volume-using-ansible/
+      # lsblk -f / blkid
+      # mkdir /apps
+      # mkfs.ext4 /dev/xvdf, mkfs.ext4 /dev/nvme1n1    
+      # mount /dev/xvdf /apps, mount /dev/nvme1n1 /apps
+      # mount /dev/sdf /apps
+      BlockDeviceMappings:
+        - DeviceName: "/dev/sda1"
+          Ebs:
+            VolumeSize: !If [isProdResources, 20,  !If [isDevResources, 20, 20] ]  
+            VolumeType: !If [isProdResources, gp3, !If [isDevResources, gp2, gp2]]  
+            Encrypted:  true
+
+      Tags:
+        - Key: Name
+          Value: !Join ['-', [ !Ref 'AWS::StackName', 'cfn' ]]
+        - Key: Env
+          Value: !Ref 'Env'
+        - Key: OwnerContact
+          Value: "nydevops@smbc-cm.com"
+
+Outputs:
+  Env:
+    Description: EC2 instance Environment
+    Value: !Ref 'Env'
+  InstanceId1:
+    Description: InstanceId of the EC2 instance
+    Value: !Ref 'EC2Instance1'
+  SecurityGroupId:
+    Description: Group ID of the EC2 security group
+    Value: EC2SecurityGroup
+  AZ1:
+    Description: Availability Zone of the EC2 instance
+    Value: !GetAtt [EC2Instance1, AvailabilityZone]
+  PrivateDnsName1:
+    Description: Private DNSName of the newly created EC2 instance
+    Value: !GetAtt [EC2Instance1, PrivateDnsName]
+  URL:
+    Description: URL of EC2 instance
+    Value: !Join ['', [ 'http://', !GetAtt [EC2Instance1, PrivateIp] ]]
+  PrivateIp1:
+    Description: Private IP address of the EC2 instance
+    Value: !GetAtt [EC2Instance1, PrivateIp]
+  # PublicDNS:
+  #   Description: Public DNSName of the newly created EC2 instance
+  #   Value: !GetAtt [EC2Instance1, PublicDnsName]
+  # PublicIP:
+  #   Description: Public IP address of the newly created EC2 instance
+  #   Value: !GetAtt [EC2Instance1, PublicIp]

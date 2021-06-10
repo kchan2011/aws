@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Create an EC2 instance running a Ubuntu AMI to host SonarQube and PostgresSQL containers. 
-One EBS volume will be created and mounted for apps volumeto to host container volumes.'
+Description: 'Create an EC2 instances running a Ubuntu AMI to host Nagios Core. 
+One EBS volume will be created and mounted to the active EC2 instance with running containers.  The AMI is chosen based on the region in which the stack is run.'
 Metadata:
   AWS::CloudFormation::Interface: 
     ParameterGroups: 
@@ -29,25 +29,31 @@ Parameters:
     ConstraintDescription: must specify POC, Test, Dev, QA, UAT, PreProd, Staging, Prod1a, Prod1b.
     #Default: Dev
     AllowedValues: [Dev, UAT, Prod1a, Prod1b]
+  AppsVolumeProvision:
+    Description: Apps Provison Type
+    Type: String
+    ConstraintDescription: must specify New for new apps volume or Update for mount existing apps volume.
+    Default: Update
+    AllowedValues: [New, Update]
+
   KeyName:
     Description: Name of an existing EC2 KeyPair to enable SSH access to the instance
     Type: AWS::EC2::KeyPair::KeyName
     ConstraintDescription: must be the name of an existing EC2 KeyPair.
   Vpc:
-    #Type: "List<AWS::EC2::VPC::Id>"
-    Type: AWS::EC2::VPC::Id
+    Type: "List<AWS::EC2::VPC::Id>"
     Default: vpc-07c9b85d62b6f4a7f
     Description: VpcId of your existing Virtual Private Cloud (VPC)
     ConstraintDescription: must be the VPC Id of an existing Virtual Private Cloud.
   PrivateSubnet1a:
-    Type: AWS::EC2::Subnet::Id
-    # Type: String
+    # Type: AWS::EC2::Subnet::Id
+    Type: String
     Default: subnet-0c6790c3ecaffce32 # us-east-1a
     Description: SubnetId of an existing subnet in 1 in your VPC
     ConstraintDescription: must be an existing subnet in the selected Virtual Private Cloud.
   PrivateSubnet1b:
-    Type: AWS::EC2::Subnet::Id
-    #Type: String
+    # Type: AWS::EC2::Subnet::Id
+    Type: String
     Default: subnet-0d5faa025dde79b24 # us-east-1b
     Description: SubnetId of an existing subnet in AZ2 in your VPC
     ConstraintDescription: must be an existing subnet in the selected Virtual Private Cloud.
@@ -66,71 +72,42 @@ Parameters:
     Default: 'Ubuntu Pro 20.04 LTS'
     ConstraintDescription: Select EC2 Instance AMI
     AllowedValues: ['CIS Ubuntu Linux 20.04 LTS Benchmark', 'Ubuntu Pro 20.04 LTS']
-  # ImageId:
-  #   Type: String
-  #   Default: ami-0ed28656d62ce20d6
-  #   Description: AMI ID
-  #   # ImageId: ami-0de8ae0e6d86b93c8  # CIS Ubuntu Linux 20.04 LTS Benchmark
-  #   # ImageId: ami-0ed28656d62ce20d6  # Ubuntu Pro 20.04 LTS
   EC2Iam:
     Type: String
     Default: EC2SSM
     ConstraintDescription: Type in EC2 IAM
   SonarQubePassword:
-    NoEcho: true
     Type: String
     Default: Sonar
 
 Conditions:
-  CreateDevResources:    !Equals [!Ref Env, "Dev"]
-  CreateUATResources:    !Equals [!Ref Env, "UAT"]
-  CreateProd1aResources: !Equals [!Ref Env, "Prod1a"]
-  CreateProd1bResources: !Equals [!Ref Env, "Prod1b"]
-  CreateProdResources:   !Or [!Equals [!Ref Env, "Prod1a"], !Equals [!Ref Env, "Prod1b"]]
+  isDevResources:    !Equals [!Ref Env, "Dev"]
+  isUATResources:    !Equals [!Ref Env, "UAT"]
+  isProd1aResources: !Equals [!Ref Env, "Prod1a"]
+  isProd1bResources: !Equals [!Ref Env, "Prod1b"]
+  isProdResources:   !Or [!Equals [!Ref Env, "Prod1a"], !Equals [!Ref Env, "Prod1b"]]
 
-  CreateEC2_Ubuntu20.04LTS_CIS: !Equals [!Ref EC2Image, "CIS Ubuntu Linux 20.04 LTS Benchmark" ]
-  CreateEC2_Ubuntu20.04LTS:     !Equals [!Ref EC2Image, "Ubuntu Pro 20.04 LTS" ]
+  isEC2_Ubuntu20.04LTS_CIS: !Equals [!Ref EC2Image, "CIS Ubuntu Linux 20.04 LTS Benchmark" ]
+  isEC2_Ubuntu20.04LTS:     !Equals [!Ref EC2Image, "Ubuntu Pro 20.04 LTS" ]
   
-  CreateDevEBSVolType:  !Equals [!Ref Env, "Dev"]
-  CreateUATEBSVolType:  !Equals [!Ref Env, "UAT"]
-  CreateProdEBSVolType: !Or [!Equals [!Ref Env, "Prod1a"], !Equals [!Ref Env, "Prod1b"]]
-
+  isNewEBSAppsVol:  !Equals [!Ref AppsVolumeProvision, "New"]
 Resources:
   # https://computingforgeeks.com/configure-aws-application-load-balancer-with-cloudformation/
   # https://stackoverflow.com/questions/63118516/aws-cloudformation-target-group-for-application-load-balancer-is-not-working-fo
-
-  AppsVolume:
-    Type: AWS::EC2::Volume
-    Properties:
-      Size: !If [CreateProdResources, 10, !If [CreateDevResources, 8, 8]]  
-      AvailabilityZone: !GetAtt EC2Instance1.AvailabilityZone
-      Encrypted:  true
-      VolumeType: !If [CreateProdResources, gp3, !If [CreateDevResources, gp2, gp2] ]  
-      Tags:
-        - Key: Name
-          Value: !Join ['-', [ !Ref 'AWS::StackName', 'cfn' ]]
-        - Key: Env
-          Value: !Ref 'Env'
-        - Key: OwnerContact
-          Value: "nydevops@smbc-cm.com"
-    DeletionPolicy: Retain
-
   MountPoint:
       Type: AWS::EC2::VolumeAttachment
       Properties:
         InstanceId: !Ref EC2Instance1
-        VolumeId: !Ref AppsVolume
+        VolumeId: 
+          Fn::ImportValue:
+            Fn::Sub: "CM-Nagios-EBS-${Env}-VolumeId"
         Device: /dev/sdf
-
+        
   EC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: SonarQube SG
+      GroupDescription: Nagios SG
       SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 9000
-          ToPort: 9000
-          CidrIp: 0.0.0.0/0
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
@@ -139,16 +116,19 @@ Resources:
           FromPort: -1
           ToPort: -1
           CidrIp: 0.0.0.0/0
-      VpcId: !Ref Vpc
+      VpcId: vpc-07c9b85d62b6f4a7f
 
   EC2Instance1:
     Type: AWS::EC2::Instance
+    # CreationPolicy:
+    #   ResourceSignal:
+    #     Timeout: PT5M
+
     # https://linuxtut.com/en/8ff718cd1e66778f88b5/
     # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-init.html
     # https://aws.amazon.com/premiumsupport/knowledge-center/cloudformation-helper-scripts-windows/
     # https://stackoverflow.com/questions/39760158/ubuntu-could-not-enable-service-cfn-hup
-    # https://docs.eucalyptus.cloud/eucalyptus/4.4.5/cloudformation/cf_templates.html
-    # https://dev.to/tiamatt/hands-on-aws-cloudformation-part-3-intrinsic-functions-in-action-5hj2
+    # https://www.jfrog.com/confluence/pages/viewpage.action?pageId=59082309
     Metadata:
       AWS::CloudFormation::Init:
         configSets:
@@ -158,55 +138,15 @@ Resources:
             apt:
               net-tools: []
               inetutils-traceroute: []
-              apache2: []
+              # apache2: []
               tmux: []
               mc: []
               nvme-cli: []
-              docker.io: []
-              docker-compose: []
-          files: 
-            /var/www/html/index.html: 
-              content: !Sub |
-                Hello World ${Env}
-              mode: 000644
-              owner: root
-              group: root
-            /home/root/docker-compose.yml:            
-              content: !Sub |
-                version: "3"
-                services:
-                  sonarqube:
-                    container_name: sonar-sonarqube
-                    image: sonarqube:8.5.1-enterprise
-                    # restart: always
-                    depends_on:
-                      - db
-                    environment:
-                      SONAR_JDBC_URL: jdbc:postgresql://db:5432/sonar
-                      SONAR_JDBC_USERNAME: sonar
-                      SONAR_JDBC_PASSWORD: ${SonarQubePassword}
-                    volumes:
-                      - /apps/sonarqube/conf:/opt/sonarqube/conf
-                      - /apps/sonarqube/data:/opt/sonarqube/data
-                      - /apps/sonarqube/extensions:/opt/sonarqube/extensions
-                      - /apps/sonarqube/logs:/opt/sonarqube/logs
-                    ports:
-                      - "9000:9000"
-                  db:
-                    container_name: sonar-postgres
-                    image: postgres:12
-                    # restart: always
-                    environment:
-                      POSTGRES_USER: sonar
-                      POSTGRES_PASSWORD: ${SonarQubePassword}
-                    ports:
-                      - "5432:5432"
-                    volumes:
-                      - /apps/postgres/psql:/var/lib/postgresql
-                      - /apps/postgres/data:/var/lib/postgresql/data
-              mode: 000644
-              owner: root
-              group: root
+              #docker.io: []
+              #docker-compose: []
+              nagios4: [] 
+              nagios-plugins-contrib: [] 
+              nagios-nrpe-plugin: []
         cfn-hup:
           files:
             /etc/cfn/cfn-hup.conf:
@@ -265,21 +205,27 @@ Resources:
             02_start_cfn-hup:
               command: "systemctl start cfn-hup.service"
             03_mkdir_apps:
-              command: mkdir /apps
+              command: mkdir /apps && mkdir /home/root
             04_format_apps_vol:
-              command: !If [CreateProdResources, mkfs.ext4 /dev/nvme1n1 > /home/root/mkfs_vol.log, mkfs.ext4 /dev/xvdf > /home/root/mkfs_vol.log]
+              command: !If [isNewEBSAppsVol, !If [isProdResources, mkfs.ext4 /dev/nvme1n1 > /home/root/mkfs_vol.log, mkfs.ext4 /dev/xvdf > /home/root/mkfs_vol.log], echo Skip Format]
+              # command: !If [isNewEBSAppsVol, mkfs.ext4 /dev/nvme1n1 > /home/root/mkfs_vol.log, echo Skip format apps volume > /home/root/mkfs_vol.log]
             05_mount_apps_vol:
-              command: !If [CreateProdResources, mount /dev/nvme1n1 /apps > /home/root/mount_vol.log, mount /dev/xvdf /apps > /home/root/mount_vol.log]
+              command: !If [isProdResources, mount /dev/nvme1n1 /apps > /home/root/mount_vol.log, mount /dev/xvdf /apps > /home/root/mount_vol.log]
+              # command: mount /dev/nvme1n1 /apps > /home/root/mount_vol.log
             06_vm_max_map_count:
               command: sysctl -w vm.max_map_count=262144
             07_mount_tmp:
               # docker-compose: error while loading shared libraries: libz.so.1: failed to map segment from shared object
-              command: !If [CreateEC2_Ubuntu20.04LTS_CIS, 'mount /tmp -o remount,exec /apps > /home/root/mount_tmp.log', 'echo Non CIS AMI, Skip mount tmp > /home/root/mount_tmp.log']
-            08_docker_compose_up:
-              command: !If [CreateProdResources, cd /home/root && docker-compose up -d && docker ps -a > /home/root/docker-compose.log, echo Skip docker-compose > /home/root/docker-compose.log]
+              command: !If [isEC2_Ubuntu20.04LTS_CIS, 'mount /tmp -o remount,exec /apps > /home/root/mount_tmp.log', 'echo Non CIS AMI, Skip mount tmp > /home/root/mount_tmp.log']
+            08_a2enmod:
+              # command: !If [isProdResources, cd /home/root && docker-compose up -d && docker ps -a > /home/root/docker-compose.log, echo Skip docker-compose > /home/root/docker-compose.log]
+              # command: cd /home/root && docker-compose up -d && docker ps -a > /home/root/docker-compose.log
+              # command: docker run --name artifactory -v /apps/jfrog/artifactory:/var/opt/jfrog/artifactory -p 8081:8081 -p 8082:8082 docker.bintray.io/jfrog/artifactory-pro:latest
+              command: a2enmod authz_groupfile auth_digest && mkdir /apps/nagios && chown -R nagios:nagios /apps/nagios
     # CreationPolicy:
     #   ResourceSignal:
     #     Timeout: PT5M
+
 
     # ImageId: !Ref 'LatestAmiId' # https://octopus.com/blog/aws-cloudformation-ec2-examples
     # CIS Ubuntu Linux 20.04 LTS Benchmark - Level 1 - ami-0de8ae0e6d86b93c8
@@ -289,17 +235,11 @@ Resources:
     # https://aws.amazon.com/marketplace/server/configuration?productId=ae7ed378-8838-4fcf-842d-d1d09b34f116&ref_=psb_cfg_continue
     # DisableApiTermination: true
     Properties:
-      ImageId: !If [CreateEC2_Ubuntu20.04LTS_CIS, ami-0de8ae0e6d86b93c8, !If [CreateEC2_Ubuntu20.04LTS, ami-0ed28656d62ce20d6, ami-0ed28656d62ce20d6] ]  
-
-      # InstanceType: !Ref 'InstanceType'
-      InstanceType: !If [CreateProdResources, m5.large, !If [CreateDevResources, t2.micro, t3.large] ]  
-
+      ImageId: !If [isEC2_Ubuntu20.04LTS_CIS, ami-0de8ae0e6d86b93c8, !If [isEC2_Ubuntu20.04LTS, ami-0ed28656d62ce20d6, ami-0ed28656d62ce20d6]]  
+      InstanceType: !If [isProdResources, m5.large, !If [isDevResources, t2.micro, t3.large]]  
       KeyName: !Ref 'KeyName'
       IamInstanceProfile: !Ref 'EC2Iam'
-      # Monitoring: true
-      # Monitoring: false
-      # SubnetId: subnet-0d5faa025dde79b24
-      SubnetId: !If [CreateProd1bResources, !Ref PrivateSubnet1b, !Ref PrivateSubnet1a ]
+      SubnetId: !If [isProd1bResources, !Ref PrivateSubnet1b, !Ref PrivateSubnet1a ]
      
       SecurityGroupIds:
         - !Ref EC2SecurityGroup
@@ -336,7 +276,6 @@ Resources:
       # https://stackoverflow.com/questions/41073906/how-to-attach-and-mount-volumes-to-an-ec2-instance-using-cloudformation
       # https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ebs-using-volumes.html
       # https://hangarau.space/automatically-mounting-an-ebs-volume-using-ansible/
-      # https://www.derpturkey.com/ec2-cloudformation-example/
       # lsblk -f / blkid
       # mkdir /apps
       # mkfs.ext4 /dev/xvdf, mkfs.ext4 /dev/nvme1n1    
@@ -345,10 +284,10 @@ Resources:
       BlockDeviceMappings:
         - DeviceName: "/dev/sda1"
           Ebs:
-            VolumeSize: !If [CreateProdResources, 20,  !If [CreateDevResources, 20, 20] ]  
-            VolumeType: !If [CreateProdResources, gp3, !If [CreateDevResources, gp2, gp2] ]  
+            VolumeSize: !If [isProdResources, 20,  !If [isDevResources, 20, 20] ]  
+            VolumeType: !If [isProdResources, gp3, !If [isDevResources, gp2, gp2]]  
             Encrypted:  true
-        # https://github.com/kbild/AWS_Cloudformation_Examples/blob/master/Volume_Tagging/createEC2instance_and_tag_volume.yaml
+
       Tags:
         - Key: Name
           Value: !Join ['-', [ !Ref 'AWS::StackName', 'cfn' ]]
@@ -361,35 +300,9 @@ Outputs:
   Env:
     Description: EC2 instance Environment
     Value: !Ref 'Env'
-    Export:
-      Name: 
-        Fn::Sub: "${AWS::StackName}-Env"
-  VpcId:
-    Description: Vpc ID of EC2 instance
-    Value: !Ref 'Vpc'
-    Export:
-      Name: 
-        Fn::Sub: "${AWS::StackName}-Vpc"
-  PrivateSubnet1a:
-    Value: !Ref 'PrivateSubnet1a'
-    Export:
-      Name: 
-        Fn::Sub: "${AWS::StackName}-PrivateSubnet1a"
-  PrivateSubnet1b:
-    Value: !Ref 'PrivateSubnet1b'
-    Export:
-      Name: 
-        Fn::Sub: "${AWS::StackName}-PrivateSubnet1b"
   InstanceId1:
     Description: InstanceId of the EC2 instance
     Value: !Ref 'EC2Instance1'
-    Export:
-      Name: 
-        Fn::Sub: "${AWS::StackName}-InstanceId1"
-  AppsVolumeId:
-    Description: Apps Volume ID of EC2 instance
-    Value: !Ref 'AppsVolume'
-        
   SecurityGroupId:
     Description: Group ID of the EC2 security group
     Value: EC2SecurityGroup
@@ -401,16 +314,10 @@ Outputs:
     Value: !GetAtt [EC2Instance1, PrivateDnsName]
   URL:
     Description: URL of EC2 instance
-    Value: !Join ['', [ 'http://', !GetAtt [EC2Instance1, PrivateIp] ]]
+    Value: !Join ['', [ 'http://', !GetAtt [EC2Instance1, PrivateIp], '/nagios' ]]
   PrivateIp1:
     Description: Private IP address of the EC2 instance
     Value: !GetAtt [EC2Instance1, PrivateIp]
-    Export:
-      Name: 
-        Fn::Sub: "${AWS::StackName}-PrivateIp1"
-
-
-
   # PublicDNS:
   #   Description: Public DNSName of the newly created EC2 instance
   #   Value: !GetAtt [EC2Instance1, PublicDnsName]

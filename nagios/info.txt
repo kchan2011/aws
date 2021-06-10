@@ -1,0 +1,69 @@
+https://linuxize.com/post/how-to-install-nagios-on-ubuntu-20-04/
+https://www.howtoforge.com/tutorial/how-to-install-nagios-on-ubuntu-2004/
+
+sudo apt update
+X sudo apt install nagios4 nagios-plugins-contrib nagios-nrpe-plugin
+
+sudo apt install -y autoconf bc gawk dc build-essential gcc libc6 make wget unzip apache2 php libapache2-mod-php libgd-dev libmcrypt-dev make libssl-dev snmp libnet-snmp-perl gettext
+
+
+sudo mkdir /home/root && cd /home/root && wget https://github.com/NagiosEnterprises/nagioscore/archive/nagios-4.4.6.tar.gz
+
+tar -xf nagios-4.4.6.tar.gz && cd nagioscore-*/
+sudo ./configure --with-httpd-conf=/etc/apache2/sites-enabled
+sudo make all
+
+sudo make install-groups-users
+sudo usermod -a -G nagios www-data
+sudo make install
+sudo make install-daemoninit
+sudo make install-commandmode
+sudo make install-config
+sudo make install-webconf
+sudo a2enmod rewrite cgi
+systemctl restart apache2
+
+sudo htpasswd -c /usr/local/nagios/etc/htpasswd.users nagiosadmin
+
+http(s)://your_domain_or_ip_address/nagios
+
+curl http://10.0.20.8/nagios
+
+curl http://nagiosadmin:xxxxx@10.0.20.8/nagios/main.php
+
+==========================================
+sudo a2enmod authz_groupfile auth_digest
+
+# Open the configuration file with your text editor:
+
+sudo nano /etc/apache2/conf-enabled/nagios4-cgi.conf
+
+# The file also includes instructions for configuring different access levels.
+
+# Once done restart Apache:
+
+sudo systemctl restart apache2
+
+sudo systemctl status apache2
+sudo systemctl status nagios4
+
+=============
+
+Creating User Account
+By default, Nagios is configured to grant administrative privileges to a user named “nagiosadmin”. With this user, you can log in to the Nagios web interface and manage your inventory. Use the following htdigest command to create the user:
+
+sudo htdigest -c /etc/nagios4/htdigest.users Nagios4 nagiosadmin
+
+=============
+
+Configuring Firewall
+Ubuntu ships with a firewall configuration tool called UFW. If the firewall is enabled on your system, make sure to open the HTTP and HTTPS ports:
+
+sudo ufw allow Apache
+
+Accessing the Nagios Web Interface
+To access the Nagios web interface open your favorite browser and type your server’s domain name or public IP address followed by /nagios:
+
+http(s)://your_domain_or_ip_address/nagios
+
+

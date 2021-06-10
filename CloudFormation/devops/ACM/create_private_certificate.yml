@@ -1,0 +1,55 @@
+# https://aws.amazon.com/blogs/security/how-to-use-aws-certificate-manager-with-aws-cloudformation/
+AWSTemplateFormatVersion: 2010-09-09
+Description: >
+  This CloudFormation template validates ACM certificate
+  using AWS Route53 DNS service.  
+
+Parameters:
+  Env:
+    Description: Application Envirnoment Type
+    Type: String
+    ConstraintDescription: must specify Dev, UAT, Prod.
+    #Default: Dev
+    AllowedValues: [Dev, UAT, Prod]
+  R53DomainName:
+    Description: >
+      Fully qualified domain name (FQDN), such as www.example.com,
+      that you want to secure with an ACM certificate.
+    Type: String
+    AllowedPattern: '^(\*\.)?(((?!-)[A-Za-z0-9-]{0,62}[A-Za-z0-9])\.)+((?!-)[A-Za-z0-9-]{1,62}[A-Za-z0-9])$'
+  R53HostedZoneId:
+    Description: Hosted Zone ID
+    Type: String
+    Default: Z0624461396GOD3MV9JET
+
+Resources: 
+  # https://docs.aws.amazon.com/acm-pca/latest/userguide/PCACertInstall.html
+  ACMCertificate: 
+    Type: "AWS::CertificateManager::Certificate"
+    Properties:
+      CertificateAuthorityArn: arn:aws:acm-pca:us-east-1:497882246895:certificate-authority/2c9c6b57-13bf-4460-83b1-8ab9da2330fe
+      DomainName: !Ref R53DomainName
+      # CertificateTransparencyLoggingPreference: DISABLED
+      DomainValidationOptions:
+            - DomainName: !Ref R53DomainName
+              HostedZoneId: !Ref R53HostedZoneId
+      ValidationMethod: DNS
+
+      Tags:
+        - Key: Name
+          Value: ACM-SonarQube-cfn
+        - Key: Env
+          Value: !Ref 'Env'
+
+Outputs:
+# https://github.com/vanderbilt-redcap/redcap-aws-cloudformation/blob/master/01-rc-certificate.yaml
+# https://hands-on.cloud/aws-cloudformation-how-to-automatically-validate-acm-ssl-certificate/
+  Env:
+    Description: Certificate Environment
+    Value: !Ref 'Env'
+  # ACMCertificateArn:
+  #   Description: ACMCertificate ARN
+  #   Value: !Ref ACMCertificate
+  #   Export:
+  #     Name: 
+  #       !Sub ${AWS::StackName}-ACMCertificateArn

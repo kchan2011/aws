@@ -1,0 +1,51 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Create an EBS volume for Cloudformation Apps CrossStack in AZ1/AZ2 based on the Env parameter'
+Parameters:
+  Env:
+    Description: Application Envirnoment Type
+    Type: String
+    ConstraintDescription: must specify Dev, UAT, Prod1a, Prod1b.
+    #Default: Dev
+    AllowedValues: [Dev, UAT, Prod1a, Prod1b]
+  EBSVolumeSize:
+    Description: EBS Volume Size in GB
+    Type: Number
+    Default: 8
+
+Conditions:
+  isDevResources:    !Equals [!Ref Env, "Dev"]
+  isUATResources:    !Equals [!Ref Env, "UAT"]
+  isProd1aResources: !Equals [!Ref Env, "Prod1a"]
+  isProd1bResources: !Equals [!Ref Env, "Prod1b"]
+  isProdResources:   !Or [!Equals [!Ref Env, "Prod1a"], !Equals [!Ref Env, "Prod1b"]]
+
+Resources:
+  NewVolume:
+    Type: AWS::EC2::Volume
+    Properties: 
+      Size: !Ref EBSVolumeSize
+      VolumeType: !If [ isProdResources, gp3, gp2 ]
+      Encrypted: true
+      AvailabilityZone: !If [ isProd1bResources, 'us-east-1b', 'us-east-1a' ]
+      # AvailabilityZone: us-east-1a
+      Tags:
+        - Key: Name
+          Value: !Join ['-', [ !Ref 'AWS::StackName', 'cfn' ]]
+        - Key:   Env
+          Value: !Ref 'Env'
+        - Key:   OwnerContact
+          Value: "nydevops@smbc-cm.com"
+
+Outputs:
+  Env:
+    Description: Environment
+    Value: !Ref 'Env'
+    Export:
+      Name:
+        !Sub "${AWS::StackName}"
+  VolumeId:
+    Description: New EBS Volume ID
+    Value: !Ref 'NewVolume'
+    Export:
+      Name: 
+        !Sub "${AWS::StackName}-VolumeId"

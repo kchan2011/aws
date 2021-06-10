@@ -56,15 +56,22 @@ Resources:
         - Key: Env
           Value: !Ref Env
 
+  # https://github.com/awslabs/cloudformation-ldaps-nlb-template/blob/master/NLB_SimpleAD.template
   LoadBalancerListener:
     Type: "AWS::ElasticLoadBalancingV2::Listener"
     Properties:
       LoadBalancerArn: !Ref LoadBalancer
-      Port: 80
-      Protocol: TCP
+      # Port: 80
+      # Protocol: TCP
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref DefaultTargetGroup
+      Port: 443
+      Protocol: TLS
+      # SslPolicy: ELBSecurityPolicy-TLS-1-2-2017-01
+      SslPolicy: ELBSecurityPolicy-2016-08
+      Certificates:
+        - CertificateArn: !Ref wildCardCertificateARN
 
   DefaultTargetGroup:
     Type: "AWS::ElasticLoadBalancingV2::TargetGroup"

@@ -47,8 +47,7 @@ aws cloudformation deploy --template-file C:\downloads\github\aws\CloudFormation
 ### SonarQube EBS Apps Volume - Dev
 SET Env=Dev
 SET Apps=SonarQube
-SET EBSVolumeSize=2
-aws cloudformation deploy --template-file C:\downloads\github\aws\CloudFormation\devops\EC2\EBS.yml --stack-name CM-%Apps%-EBS-%Env% --parameter-overrides Env=%Env% --profile kchan2018
+aws cloudformation deploy --template-file C:\downloads\github\aws\CloudFormation\EC2\devops\EBS.yml --stack-name CM-%Apps%-EBS-%Env% --parameter-overrides Env=%Env%
 
 ### SonarQube Apps Dev CrossStack using NEW EBS Apps Volume from Above Cloudformation Stack for 1st time
 SET AppsVolumeProvision=New
@@ -56,10 +55,8 @@ SET AppsVolumeProvision=Update
 
 SET Env=Dev
 SET KeyName=kevinchanSMBC
-SET KeyName=kevin
 SET sonarqubepassword=test12345
-
-aws cloudformation deploy --template-file C:\downloads\github\aws\CloudFormation\devops\EC2\SonarQube-CrossStack.yml --stack-name CM-SonarQube-Apps-%Env% --parameter-overrides KeyName=%KeyName% Env=%Env% SonarQubePassword=%sonarqubepassword% AppsVolumeProvision=%AppsVolumeProvision% --profile kchan2018
+aws cloudformation deploy --template-file C:\downloads\github\aws\CloudFormation\EC2\devops\SonarQube-CrossStack.yml --stack-name CM-SonarQube-Apps-%Env% --parameter-overrides KeyName=%KeyName% Env=%Env% SonarQubePassword=%sonarqubepassword% AppsVolumeProvision=%AppsVolumeProvision%
 
 ### SonarQube Apps Dev CrossStack using EXISTING EBS Apps Volume from Above Cloudformation Stack
 SET AppsVolumeProvision=Update
